@@ -1,0 +1,138 @@
+import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { PublishHistoryRecord } from "../shared/desktopApi";
+
+interface HistoryStore {
+  add(record: PublishHistoryRecord): Promise<void>;
+  list(): Promise<PublishHistoryRecord[]>;
+}
+
+type SqliteStatement = {
+  run(...params: unknown[]): unknown;
+  all(): unknown[];
+};
+
+type SqliteDatabase = {
+  exec(sql: string): void;
+  prepare(sql: string): SqliteStatement;
+};
+
+type NodeSqliteModule = {
+  DatabaseSync: new (path: string) => SqliteDatabase;
+};
+
+class SqliteHistoryStore implements HistoryStore {
+  private readonly db: SqliteDatabase;
+
+  constructor(dbPath: string, sqlite: NodeSqliteModule) {
+    this.db = new sqlite.DatabaseSync(dbPath);
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS publish_history (
+        document_id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        issuer TEXT NOT NULL,
+        issued_at TEXT NOT NULL,
+        display_expires_at TEXT,
+        package_sha256 TEXT NOT NULL,
+        kdf TEXT NOT NULL,
+        iterations INTEGER NOT NULL,
+        content_alg TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        output_path TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
+
+  async add(record: PublishHistoryRecord): Promise<void> {
+    this.db
+      .prepare(`
+        INSERT OR REPLACE INTO publish_history (
+          document_id,
+          title,
+          issuer,
+          issued_at,
+          display_expires_at,
+          package_sha256,
+          kdf,
+          iterations,
+          content_alg,
+          created_by,
+          output_path,
+          platform
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        record.documentId,
+        record.title,
+        record.issuer,
+        record.issuedAt,
+        record.displayExpiresAt ?? null,
+        record.packageSha256,
+        record.kdf,
+        record.iterations,
+        record.contentAlg,
+        record.createdBy,
+        record.outputPath,
+        record.platform
+      );
+  }
+
+  async list(): Promise<PublishHistoryRecord[]> {
+    return this.db
+      .prepare(`
+        SELECT
+          document_id AS documentId,
+          title,
+          issuer,
+          issued_at AS issuedAt,
+          display_expires_at AS displayExpiresAt,
+          package_sha256 AS packageSha256,
+          kdf,
+          iterations,
+          content_alg AS contentAlg,
+          created_by AS createdBy,
+          output_path AS outputPath,
+          platform
+        FROM publish_history
+        ORDER BY issued_at DESC
+        LIMIT 100
+      `)
+      .all() as PublishHistoryRecord[];
+  }
+}
+
+class JsonlHistoryStore implements HistoryStore {
+  constructor(private readonly filePath: string) {}
+
+  async add(record: PublishHistoryRecord): Promise<void> {
+    await appendFile(this.filePath, `${JSON.stringify(record)}\n`, "utf8");
+  }
+
+  async list(): Promise<PublishHistoryRecord[]> {
+    try {
+      const text = await readFile(this.filePath, "utf8");
+      return text
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as PublishHistoryRecord)
+        .reverse()
+        .slice(0, 100);
+    } catch {
+      return [];
+    }
+  }
+}
+
+export async function createHistoryStore(userDataPath: string): Promise<HistoryStore> {
+  await mkdir(userDataPath, { recursive: true });
+
+  try {
+    const sqlite = (await import("node:sqlite")) as NodeSqliteModule;
+    return new SqliteHistoryStore(join(userDataPath, "publish-history.sqlite"), sqlite);
+  } catch {
+    return new JsonlHistoryStore(join(userDataPath, "publish-history.jsonl"));
+  }
+}
+

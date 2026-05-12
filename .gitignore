@@ -1,0 +1,10 @@
+node_modules/
+dist/
+out/
+release/
+.vite/
+.omx/
+.DS_Store
+*.log
+*.swp
+coverage/
