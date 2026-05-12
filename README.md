@@ -56,6 +56,13 @@ npm install
 npm run dev
 ```
 
+Electron 앱 시작 시 `Electron uninstall` 또는 `Electron failed to install correctly` 오류가 나오면 Electron 런타임 바이너리가 내려받아지지 않은 상태입니다. 아래 명령으로 복구한 뒤 다시 실행하세요.
+
+```bash
+npm run fix:electron
+npm run dev
+```
+
 ## 테스트
 
 ```bash
@@ -148,4 +155,3 @@ npm run make:win
 - HTML/JS 뷰어 코드 변조 방지
 
 특히 공격자가 HTML 파일 자체를 변조할 수 있는 환경에서는 입력 PIN 탈취 위험이 있습니다. 고보안 환경에서는 전자서명 검증 또는 신뢰된 로컬 뷰어 앱을 추가해야 합니다.
-

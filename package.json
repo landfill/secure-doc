@@ -9,6 +9,7 @@
     "dev": "electron-vite dev",
     "build": "tsc --noEmit && electron-vite build",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "fix:electron": "npx install-electron --no",
     "make:mac": "npm run build && electron-builder --mac dmg --universal",
     "make:win": "npm run build && electron-builder --win nsis --x64"
   },
