@@ -199,15 +199,97 @@ select:focus,
   font-weight: 800;
 }
 
+.toolbar button.active,
+.mode-toggle button.active {
+  border-color: #1457d9;
+  color: #1457d9;
+  background: #eaf2ff;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.mode-toggle button {
+  min-width: 72px;
+}
+
 .editor {
   min-height: 240px;
   margin: 18px;
+  border: 1px solid #b8c2d2;
+  border-radius: 6px;
   padding: 18px;
   line-height: 1.65;
   color: #1b2432;
   background: #fff;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 14px;
+}
+
+.rich-editor {
+  cursor: text;
+}
+
+.rich-editor:focus-within {
+  outline: 3px solid #d9e6ff;
+  border-color: #1457d9;
+}
+
+.rich-editor .tiptap {
+  min-height: 204px;
+  outline: none;
+  font-size: 16px;
+}
+
+.rich-editor .tiptap > :first-child,
+.preview > :first-child {
+  margin-top: 0;
+}
+
+.rich-editor .tiptap > :last-child,
+.preview > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-editor .tiptap h1,
+.preview h1 {
+  margin: 0 0 18px;
+  font-size: 32px;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.rich-editor .tiptap h2,
+.preview h2 {
+  margin: 22px 0 12px;
+  font-size: 24px;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.rich-editor .tiptap p,
+.preview p {
+  margin: 0 0 12px;
+}
+
+.rich-editor .tiptap ul,
+.preview ul {
+  margin: 0 0 12px;
+  padding-left: 24px;
+}
+
+.source-editor {
+  min-height: 280px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .preview-band {

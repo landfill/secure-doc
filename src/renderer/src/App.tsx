@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import type { PublishHistoryRecord } from "../../shared/desktopApi";
 import {
   COMPAT_PIN_KDF_ITERATIONS,
@@ -9,6 +11,8 @@ import {
 import { issueSecureDocument, type SecureDocPlainContent } from "../../shared/securePackage";
 import { buildSecureHtmlDocument } from "../../shared/viewerHtml";
 import { sanitizeHtml, stripHtml } from "./sanitizeHtml";
+
+type EditorMode = "visual" | "html";
 
 type MetadataState = {
   title: string;
@@ -22,7 +26,7 @@ type MetadataState = {
   createdBy: string;
 };
 
-const initialEditorHtml = `<article><h1>보안문서</h1><p>본문 내용을 입력하세요.</p></article>`;
+const initialEditorHtml = `<h1>보안문서</h1><p>본문 내용을 입력하세요.</p>`;
 
 const defaultMetadata: MetadataState = {
   title: "보안문서",
@@ -55,9 +59,9 @@ function compactPrivateMeta(metadata: MetadataState): SecureDocPlainContent["pri
 }
 
 export function App(): ReactElement {
-  const editorRef = useRef<HTMLTextAreaElement>(null);
   const [metadata, setMetadata] = useState<MetadataState>(defaultMetadata);
   const [editorHtml, setEditorHtml] = useState(initialEditorHtml);
+  const [editorMode, setEditorMode] = useState<EditorMode>("visual");
   const [pin, setPin] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [showPin, setShowPin] = useState(false);
@@ -70,6 +74,20 @@ export function App(): ReactElement {
   const pinResult = useMemo(() => evaluatePinPolicy(pin), [pin]);
   const sanitizedPreview = useMemo(() => sanitizeHtml(editorHtml), [editorHtml]);
   const contentText = useMemo(() => stripHtml(sanitizedPreview), [sanitizedPreview]);
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: {
+          levels: [1, 2, 3]
+        }
+      })
+    ],
+    content: initialEditorHtml,
+    immediatelyRender: false,
+    onUpdate({ editor: currentEditor }) {
+      setEditorHtml(currentEditor.getHTML());
+    }
+  });
 
   useEffect(() => {
     window.secureDoc?.getHistory().then(setHistory).catch(() => setHistory([]));
@@ -82,42 +100,29 @@ export function App(): ReactElement {
     }));
   }
 
-  function replaceEditorSelection(buildReplacement: (selected: string) => string): void {
-    const editor = editorRef.current;
-    if (!editor) {
+  function switchEditorMode(nextMode: EditorMode): void {
+    if (nextMode === "html") {
+      setEditorHtml(editor?.getHTML() ?? editorHtml);
+      setEditorMode("html");
       return;
     }
 
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    const selected = editorHtml.slice(start, end);
-    const replacement = buildReplacement(selected || "본문");
-    const nextHtml = `${editorHtml.slice(0, start)}${replacement}${editorHtml.slice(end)}`;
-    setEditorHtml(nextHtml);
-
-    requestAnimationFrame(() => {
-      editor.focus();
-      editor.setSelectionRange(start, start + replacement.length);
-    });
+    const sanitizedHtml = sanitizeHtml(editorHtml);
+    setEditorHtml(sanitizedHtml);
+    editor?.commands.setContent(sanitizedHtml);
+    setEditorMode("visual");
   }
 
-  function wrapBlock(tagName: "h1" | "h2" | "p"): void {
-    replaceEditorSelection((selected) => `<${tagName}>${selected}</${tagName}>`);
+  function runEditorCommand(action: () => boolean): void {
+    if (editorMode !== "visual") {
+      switchEditorMode("visual");
+      return;
+    }
+    action();
   }
 
-  function wrapInline(tagName: "strong" | "em"): void {
-    replaceEditorSelection((selected) => `<${tagName}>${selected}</${tagName}>`);
-  }
-
-  function insertList(): void {
-    replaceEditorSelection((selected) => {
-      const items = selected
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-      const normalizedItems = items.length > 0 ? items : ["항목"];
-      return `<ul>${normalizedItems.map((item) => `<li>${item}</li>`).join("")}</ul>`;
-    });
+  function isEditorActive(name: string, attributes?: Record<string, unknown>): boolean {
+    return Boolean(editor?.isActive(name, attributes));
   }
 
   function handleGeneratePin(): void {
@@ -292,31 +297,77 @@ export function App(): ReactElement {
         <section className="panel editor-panel" aria-labelledby="editor-heading">
           <div className="section-heading">
             <h2 id="editor-heading">암호화 본문 작성</h2>
+            <div className="editor-actions">
+              <div className="mode-toggle" aria-label="본문 작성 모드">
+                <button
+                  type="button"
+                  className={editorMode === "visual" ? "active" : ""}
+                  onClick={() => switchEditorMode("visual")}
+                >
+                  편집
+                </button>
+                <button
+                  type="button"
+                  className={editorMode === "html" ? "active" : ""}
+                  onClick={() => switchEditorMode("html")}
+                >
+                  HTML 보기
+                </button>
+              </div>
             <div className="toolbar" aria-label="본문 서식">
-              <button type="button" onClick={() => wrapBlock("h1")}>
+              <button
+                type="button"
+                className={isEditorActive("heading", { level: 1 }) ? "active" : ""}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleHeading({ level: 1 }).run() ?? false)}
+              >
                 H1
               </button>
-              <button type="button" onClick={() => wrapBlock("h2")}>
+              <button
+                type="button"
+                className={isEditorActive("heading", { level: 2 }) ? "active" : ""}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleHeading({ level: 2 }).run() ?? false)}
+              >
                 H2
               </button>
-              <button type="button" onClick={() => wrapInline("strong")}>
+              <button
+                type="button"
+                className={isEditorActive("bold") ? "active" : ""}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBold().run() ?? false)}
+              >
                 B
               </button>
-              <button type="button" onClick={() => wrapInline("em")}>
+              <button
+                type="button"
+                className={isEditorActive("italic") ? "active" : ""}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleItalic().run() ?? false)}
+              >
                 I
               </button>
-              <button type="button" onClick={insertList}>
+              <button
+                type="button"
+                className={isEditorActive("bulletList") ? "active" : ""}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBulletList().run() ?? false)}
+              >
                 List
               </button>
             </div>
+            </div>
           </div>
-          <textarea
-            ref={editorRef}
-            className="editor"
-            value={editorHtml}
-            spellCheck={false}
-            onChange={(event) => setEditorHtml(event.target.value)}
-          />
+          {editorMode === "visual" ? (
+            <EditorContent editor={editor} className="editor rich-editor" />
+          ) : (
+            <textarea
+              className="editor source-editor"
+              value={editorHtml}
+              spellCheck={false}
+              onChange={(event) => setEditorHtml(event.target.value)}
+            />
+          )}
           <div className="preview-band">
             <h3>미리보기</h3>
             <div className="preview" dangerouslySetInnerHTML={{ __html: sanitizedPreview }} />

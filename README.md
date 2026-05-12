@@ -8,6 +8,7 @@ WebCrypto 기반 오프라인 보안문서 발행 및 열람 시스템입니다.
 
 - Electron + React/TypeScript 기반 Admin 발행도구
 - macOS universal DMG, Windows x64 NSIS 설치 파일 생성
+- Tiptap 기반 WYSIWYG 본문 에디터와 HTML 보기 모드
 - 6자리 숫자 PIN 정책 적용
 - `crypto.getRandomValues()` 기반 PIN 자동 생성
 - PBKDF2-HMAC-SHA-256 기반 KEK 유도
