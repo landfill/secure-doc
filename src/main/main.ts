@@ -17,7 +17,7 @@ function createWindow(): void {
     title: "Secure Doc Admin",
     show: false,
     webPreferences: {
-      preload: join(__dirname, "../preload/preload.js"),
+      preload: join(__dirname, "../preload/preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
@@ -110,4 +110,3 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
-

@@ -28,5 +28,7 @@ test("source does not use weak random, browser storage, or numeric PIN input typ
   assert.equal(combined.includes("localStorage"), false);
   assert.equal(combined.includes("sessionStorage"), false);
   assert.equal(combined.includes('type="number"'), false);
+  assert.equal(combined.includes("contentEditable"), false);
+  assert.equal(combined.includes("../preload/preload.js"), false);
+  assert.equal(combined.includes("../preload/preload.mjs"), true);
 });
-

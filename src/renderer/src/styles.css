@@ -19,6 +19,7 @@ body {
 
 button,
 input,
+textarea,
 select {
   font: inherit;
 }
@@ -160,9 +161,9 @@ label.wide {
 }
 
 input,
+textarea,
 select {
   width: 100%;
-  height: 38px;
   border: 1px solid #b8c2d2;
   border-radius: 6px;
   padding: 0 10px;
@@ -170,7 +171,17 @@ select {
   background: #fff;
 }
 
+input,
+select {
+  height: 38px;
+}
+
+textarea {
+  resize: vertical;
+}
+
 input:focus,
+textarea:focus,
 select:focus,
 .editor:focus {
   outline: 3px solid #d9e6ff;
@@ -191,11 +202,12 @@ select:focus,
 .editor {
   min-height: 240px;
   margin: 18px;
-  border: 1px solid #b8c2d2;
-  border-radius: 6px;
   padding: 18px;
   line-height: 1.65;
+  color: #1b2432;
   background: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
 }
 
 .preview-band {
@@ -331,4 +343,3 @@ select:focus,
     position: static;
   }
 }
-

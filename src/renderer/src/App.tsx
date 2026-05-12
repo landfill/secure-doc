@@ -55,7 +55,7 @@ function compactPrivateMeta(metadata: MetadataState): SecureDocPlainContent["pri
 }
 
 export function App(): ReactElement {
-  const editorRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
   const [metadata, setMetadata] = useState<MetadataState>(defaultMetadata);
   const [editorHtml, setEditorHtml] = useState(initialEditorHtml);
   const [pin, setPin] = useState("");
@@ -82,10 +82,42 @@ export function App(): ReactElement {
     }));
   }
 
-  function applyEditorCommand(command: string, value?: string): void {
-    editorRef.current?.focus();
-    document.execCommand(command, false, value);
-    setEditorHtml(editorRef.current?.innerHTML ?? "");
+  function replaceEditorSelection(buildReplacement: (selected: string) => string): void {
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const selected = editorHtml.slice(start, end);
+    const replacement = buildReplacement(selected || "본문");
+    const nextHtml = `${editorHtml.slice(0, start)}${replacement}${editorHtml.slice(end)}`;
+    setEditorHtml(nextHtml);
+
+    requestAnimationFrame(() => {
+      editor.focus();
+      editor.setSelectionRange(start, start + replacement.length);
+    });
+  }
+
+  function wrapBlock(tagName: "h1" | "h2" | "p"): void {
+    replaceEditorSelection((selected) => `<${tagName}>${selected}</${tagName}>`);
+  }
+
+  function wrapInline(tagName: "strong" | "em"): void {
+    replaceEditorSelection((selected) => `<${tagName}>${selected}</${tagName}>`);
+  }
+
+  function insertList(): void {
+    replaceEditorSelection((selected) => {
+      const items = selected
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const normalizedItems = items.length > 0 ? items : ["항목"];
+      return `<ul>${normalizedItems.map((item) => `<li>${item}</li>`).join("")}</ul>`;
+    });
   }
 
   function handleGeneratePin(): void {
@@ -261,30 +293,29 @@ export function App(): ReactElement {
           <div className="section-heading">
             <h2 id="editor-heading">암호화 본문 작성</h2>
             <div className="toolbar" aria-label="본문 서식">
-              <button type="button" onClick={() => applyEditorCommand("formatBlock", "h1")}>
+              <button type="button" onClick={() => wrapBlock("h1")}>
                 H1
               </button>
-              <button type="button" onClick={() => applyEditorCommand("formatBlock", "h2")}>
+              <button type="button" onClick={() => wrapBlock("h2")}>
                 H2
               </button>
-              <button type="button" onClick={() => applyEditorCommand("bold")}>
+              <button type="button" onClick={() => wrapInline("strong")}>
                 B
               </button>
-              <button type="button" onClick={() => applyEditorCommand("italic")}>
+              <button type="button" onClick={() => wrapInline("em")}>
                 I
               </button>
-              <button type="button" onClick={() => applyEditorCommand("insertUnorderedList")}>
+              <button type="button" onClick={insertList}>
                 List
               </button>
             </div>
           </div>
-          <div
+          <textarea
             ref={editorRef}
             className="editor"
-            contentEditable
-            suppressContentEditableWarning
-            onInput={(event) => setEditorHtml(event.currentTarget.innerHTML)}
-            dangerouslySetInnerHTML={{ __html: initialEditorHtml }}
+            value={editorHtml}
+            spellCheck={false}
+            onChange={(event) => setEditorHtml(event.target.value)}
           />
           <div className="preview-band">
             <h3>미리보기</h3>
