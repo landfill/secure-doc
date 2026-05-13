@@ -9,7 +9,7 @@ import {
 } from "../src/shared/securePackage.ts";
 import { buildSecureHtmlDocument } from "../src/shared/viewerHtml.ts";
 
-const pin = "048291";
+const pin = "A9-zK2!mP4_q";
 const content: SecureDocPlainContent = {
   type: "secure-doc-content",
   version: "1.0",
@@ -18,7 +18,7 @@ const content: SecureDocPlainContent = {
   assets: []
 };
 
-test("issues and unlocks a DEK/KEK separated package with a six-digit PIN", async () => {
+test("issues and unlocks a DEK/KEK separated package with a PIN in policy range", async () => {
   const pkg = await issueSecureDocument({
     content,
     pin,
@@ -34,9 +34,10 @@ test("issues and unlocks a DEK/KEK separated package with a six-digit PIN", asyn
   const unlocked = await unlockSecureDocument(pin, pkg);
   assert.equal(unlocked.html, content.html);
   assert.equal(pkg.crypto.kdf.iterations, 1000);
-  assert.equal(pkg.ui.keyPolicy.type, "numeric-pin");
-  assert.equal(pkg.ui.keyPolicy.length, 6);
-  assert.equal(pkg.ui.keyPolicy.allowLeadingZero, true);
+  assert.equal(pkg.ui.keyPolicy.type, "pin-code");
+  assert.equal(pkg.ui.keyPolicy.minLength, 6);
+  assert.equal(pkg.ui.keyPolicy.maxLength, 15);
+  assert.equal(pkg.ui.keyPolicy.allowedCharacters, "printable");
 });
 
 test("uses one public failure message for wrong PIN and metadata tampering", async () => {
@@ -52,7 +53,7 @@ test("uses one public failure message for wrong PIN and metadata tampering", asy
     }
   });
 
-  await assert.rejects(() => unlockSecureDocument("048292", pkg), {
+  await assert.rejects(() => unlockSecureDocument("A9-zK2!mP4_r", pkg), {
     message: PUBLIC_UNLOCK_ERROR
   });
 
@@ -84,6 +85,9 @@ test("does not expose plaintext body or PIN in the package HTML", async () => {
   assert.equal(html.includes(pin), false);
   assert.match(html, /connect-src 'none'/);
   assert.match(html, /type="password"/);
+  assert.match(html, /minlength="6"/);
+  assert.match(html, /maxlength="15"/);
+  assert.doesNotMatch(html, /pattern=/);
   assert.doesNotMatch(html, /type="number"/);
 });
 

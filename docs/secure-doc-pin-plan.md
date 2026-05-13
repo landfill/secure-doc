@@ -1,19 +1,19 @@
-# 6자리 PIN 기반 오프라인 보안문서 발행/열람 시스템 개정 플랜
+# 6-15자 PIN 기반 오프라인 보안문서 발행/열람 시스템 개정 플랜
 
 ## Summary
 - Admin 발행도구는 Electron + React/TypeScript 단일 코드베이스로 구현하고, 배포물은 macOS용 / Windows용 개별 설치 파일로 제공한다.
-- 문서 열람 암호는 패스프레이즈나 긴 코드가 아니라 일반적인 숫자 6자리 PIN으로 고정한다.
+- 문서 열람 암호는 패스프레이즈나 긴 코드가 아니라 6자리 이상 15자리 이내 PIN으로 제한한다.
 - 암호화 구조는 `PIN -> PBKDF2 -> KEK`, `DEK -> 본문 AES-256-GCM 암호화`, `KEK -> DEK wrapping`을 사용한다.
-- 6자리 PIN은 오프라인 대입 공격에 취약하므로 MVP 기본 KDF 비용은 PBKDF2-HMAC-SHA-256 1,000,000 iterations로 상향하고, 저사양 호환용으로 600,000 선택지를 둔다.
+- 짧은 PIN은 오프라인 대입 공격에 취약하므로 MVP 기본 KDF 비용은 PBKDF2-HMAC-SHA-256 1,000,000 iterations로 상향하고, 저사양 호환용으로 600,000 선택지를 둔다.
 
 ## Key Changes
 - Admin 앱은 macOS Apple Silicon/Intel universal DMG와 Windows x64 NSIS 설치 파일로 각각 빌드한다.
-- 입력 PIN은 `000000`부터 `999999`까지 가능한 6자리 숫자 문자열이며, 앞자리 `0`을 보존한다.
-- PIN 입력은 `type="password"`, `inputmode="numeric"`, `maxlength=6`을 사용하고 `type="number"`는 사용하지 않는다.
+- 입력 PIN은 6자리 이상 15자리 이내 문자열이며, 숫자, 문자, 기호를 허용한다.
+- PIN 입력은 `type="password"`, `minlength=6`, `maxlength=15`를 사용하고 `type="number"`는 사용하지 않는다.
 - 자동 PIN 생성은 `crypto.getRandomValues()` 기반 균등 난수로 수행한다.
-- 직접 입력 시 `000000`, `111111`, `123456`, `654321` 같은 명백한 취약 PIN은 차단한다.
+- 직접 입력 시 `000000`, `aaaaaa`, `123456`, `654321` 같은 명백한 취약 PIN은 차단한다.
 - UI 문구는 "키 강도 검사"가 아니라 "PIN 정책 검사"로 표현한다.
-- 관리자에게 "6자리 PIN은 편의형 암호이며, 고보안 문서는 서버 인증/전자서명/신뢰된 뷰어 앱이 필요하다"는 보안 안내를 표시한다.
+- 관리자에게 "6자리 이상 15자리 이내 PIN은 편의형 암호이며, 고보안 문서는 서버 인증/전자서명/신뢰된 뷰어 앱이 필요하다"는 보안 안내를 표시한다.
 - PIN 원문, PIN 해시, DEK, KEK, 평문 본문은 저장하지 않는다.
 
 ## Interfaces
@@ -23,12 +23,13 @@
 {
   "ui": {
     "keyLabel": "문서 열람 PIN",
-    "helpText": "별도 안내받은 6자리 숫자 PIN을 입력하세요.",
+    "helpText": "별도 안내받은 6자리 이상 15자리 이내 PIN을 입력하세요.",
     "keyPolicy": {
-      "type": "numeric-pin",
-      "length": 6,
+      "type": "pin-code",
+      "minLength": 6,
+      "maxLength": 15,
       "normalization": "nfkc-trim",
-      "allowLeadingZero": true
+      "allowedCharacters": "printable"
     }
   }
 }
@@ -66,8 +67,8 @@ PIN이 올바르지 않거나 문서가 손상되었습니다.
 - 복호화 전 DOM에는 평문 본문을 넣지 않고, 새로고침 시 PIN을 다시 입력해야 한다.
 
 ## Test Plan
-- macOS와 Windows에서 앱 실행, 문서 작성, 6자리 PIN 직접 입력, 자동 생성, HTML 발행을 검증한다.
-- `type=number` 미사용, 앞자리 `0` PIN 보존, 취약 PIN 차단을 테스트한다.
+- macOS와 Windows에서 앱 실행, 문서 작성, 6-15자 PIN 직접 입력, 자동 생성, HTML 발행을 검증한다.
+- `type=number` 미사용, 문자/기호 PIN 허용, 취약 PIN 차단을 테스트한다.
 - 발행 이력에 PIN/평문/키 자료가 저장되지 않는지 확인한다.
 - 올바른 PIN은 복호화 성공, 잘못된 PIN/변조된 salt/iv/ciphertext는 동일 오류 메시지로 실패한다.
 - 소스 보기와 패키지 JSON에 평문 본문, PIN, PIN 해시, DEK/KEK가 없는지 검사한다.
@@ -78,6 +79,5 @@ PIN이 올바르지 않거나 문서가 손상되었습니다.
 
 ## Assumptions
 - MVP는 Electron 단일 코드베이스 + macOS/Windows 개별 배포물을 기본 선택으로 한다.
-- 6자리 숫자 PIN 요구사항은 제품 요구사항으로 수용하되, 보안 등급은 편의형 오프라인 암호로 명시한다.
+- 6-15자 PIN 요구사항은 제품 요구사항으로 수용하되, 보안 등급은 편의형 오프라인 암호로 명시한다.
 - 오프라인 단일 HTML 구조에서는 회수, 열람 로그, 강제 만료, 실질적인 실패 횟수 제한을 보장하지 않는다.
-
