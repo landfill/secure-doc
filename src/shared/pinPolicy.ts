@@ -26,7 +26,8 @@ function hasValidLength(pin: string): boolean {
 }
 
 function isRepeatedCharacter(pin: string): boolean {
-  return /^([\s\S])\1+$/.test(pin);
+  const characters = [...pin];
+  return characters.length > 1 && characters.every((character) => character === characters[0]);
 }
 
 function isSequentialDigitRun(pin: string): boolean {

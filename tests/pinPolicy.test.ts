@@ -25,7 +25,7 @@ test("rejects PINs outside the length range or with control characters", () => {
 });
 
 test("blocks obvious weak PINs across the allowed range", () => {
-  for (const pin of ["000000", "aaaaaaaaaaaa", "123456", "654321", "012345678901"]) {
+  for (const pin of ["000000", "aaaaaaaaaaaa", "😀😀😀😀😀😀", "123456", "654321", "012345678901"]) {
     const result = evaluatePinPolicy(pin);
     assert.equal(result.valid, false, pin);
   }

@@ -79,43 +79,41 @@ const documentPresets: Record<DocumentType, DocumentPreset> = {
     }
   },
   계약서: {
-    title: "영혼 귀속 및 일상 점유 계약서",
+    title: "서비스 이용 및 협력 계약서",
     description: "갑/을 정보가 자동 반영되는 계약서 샘플입니다.",
     watermarkText: "계약서",
     buildHtml(metadata) {
-      const title = metadataText(metadata.title, "영혼 귀속 및 일상 점유 계약서");
-      const firstParty = metadataText(metadata.issuer, "절대 갑");
-      const secondParty = metadataText(metadata.recipientName, "영원한 을");
+      const title = metadataText(metadata.title, "서비스 이용 및 협력 계약서");
+      const firstParty = metadataText(metadata.issuer, "갑");
+      const secondParty = metadataText(metadata.recipientName, "을");
       const contractDate = metadataText(metadata.displayExpiresAt, "202X년 XX월 XX일");
 
       return `<h1>${title}</h1>
-<p>본 계약은 <strong>${firstParty}</strong>(이하 주인님)과 <strong>${secondParty}</strong>(이하 노예) 간의 원만한, 사실은 일방적인 관계 유지를 위해 아래와 같이 체결한다.</p>
+<p>본 계약은 <strong>${firstParty}</strong>(이하 갑)과 <strong>${secondParty}</strong>(이하 을) 간의 서비스 이용 및 협력 범위를 명확히 하기 위해 아래와 같이 체결한다.</p>
 <h2>제1조 [목적]</h2>
-<p>본 계약은 노예가 주인님에게 자신의 시간, 영혼, 그리고 지갑의 일부를 자발적을 가장한 강압으로 봉헌함으로써 주인님의 삶의 질을 향상시키는 데 그 목적이 있다.</p>
+<p>본 계약은 갑이 제공하는 서비스와 을의 이용 조건, 역할, 책임을 정하고 상호 신뢰에 기반한 업무 수행을 목적으로 한다.</p>
 <h2>제2조 [효력 발생]</h2>
-<p>본 계약서는 작성된 순간부터 효력이 발생하며, 주인님이 질렸다고 선언하거나 노예가 로또 1등에 당첨되어 주인님을 매수하기 전까지 유효하다.</p>
-<h2>제3조 [노예의 5대 의무]</h2>
+<p>본 계약은 계약 체결일로부터 효력이 발생하며, 별도의 종료 합의 또는 계약서에 정한 종료 사유가 발생할 때까지 유효하다.</p>
+<h2>제3조 [을의 주요 의무]</h2>
 <ul>
-  <li>즉시 응답의 의무: 주인님의 카톡이나 전화는 3분 이내에 응답해야 한다.</li>
-  <li>무조건 공감의 의무: 주인님의 농담이 썰렁해도 노예는 최선을 다해 웃어야 한다.</li>
-  <li>메뉴 결정의 의무: 뭐 먹을까라는 질문에는 최소 3가지 이상의 후보군을 제시해야 한다.</li>
-  <li>찬양의 의무: 노예는 매일 1회 이상 주인님의 미모, 지성, 패션 센스 중 하나를 찬양해야 한다.</li>
-  <li>보디가드의 의무: 주인님이 밤늦게 배가 고프다고 할 때 간식 조달 작전에 협조해야 한다.</li>
+  <li>을은 계약 목적에 부합하도록 필요한 정보를 정확하게 제공한다.</li>
+  <li>을은 서비스 이용 과정에서 관계 법령과 본 계약의 조건을 준수한다.</li>
+  <li>을은 계정, PIN, 문서 등 접근 권한 정보를 안전하게 관리한다.</li>
+  <li>을은 계약 이행에 필요한 협조 요청에 합리적인 기간 내 응답한다.</li>
 </ul>
-<h2>제4조 [금지 사항]</h2>
+<h2>제4조 [갑의 주요 의무]</h2>
 <ul>
-  <li>주인님의 허락 없이 먼저 잠들거나 연락을 두절하는 행위</li>
-  <li>주인님보다 맛있는 것을 혼자 먹으러 가는 행위</li>
-  <li>주인님 앞에서 다른 사람의 외모를 과도하게 칭찬하는 행위</li>
+  <li>갑은 계약 목적에 필요한 서비스를 안정적으로 제공하기 위해 노력한다.</li>
+  <li>갑은 을의 정보를 계약 이행 범위 안에서만 사용한다.</li>
+  <li>갑은 보안상 필요한 안내와 변경 사항을 을에게 고지한다.</li>
 </ul>
-<h2>제5조 [보상 및 복리후생]</h2>
-<p>주인님은 기분이 좋을 때 노예에게 쓰다듬기 1회 또는 간식 한 입을 하사할 수 있다.</p>
+<h2>제5조 [비밀 유지]</h2>
+<p>갑과 을은 계약 과정에서 알게 된 상대방의 영업상, 기술상, 개인정보상 비밀을 제3자에게 공개하지 않는다.</p>
 <h2>제6조 [계약 위반 시 조치]</h2>
-<p>노예가 위 조항을 어길 시 주인님이 지정하는 배달 음식을 결제하고, 1시간 동안 개인 사진사가 되어 인생샷이 나올 때까지 셔터를 눌러야 한다.</p>
+<p>어느 일방이 본 계약을 위반한 경우 상대방은 상당한 기간을 정해 시정을 요구할 수 있으며, 시정되지 않을 경우 계약을 해지할 수 있다.</p>
 <p>계약 체결일: ${contractDate}</p>
-<p>${firstParty} (주인님): ________________ (인)</p>
-<p>${secondParty} (노예): ________________ (인)</p>
-<p><strong>주의:</strong> 본 계약서는 법적 효력이 전혀 없으며, 오로지 두 사람의 재미와 우정을 위해 작성되었습니다.</p>`;
+<p>${firstParty} (갑): ________________ (인)</p>
+<p>${secondParty} (을): ________________ (인)</p>`;
     }
   },
   고지서: {
@@ -145,41 +143,35 @@ const documentPresets: Record<DocumentType, DocumentPreset> = {
     }
   },
   안내문: {
-    title: "[긴급 공고] 인류 문명 수호를 위한 영역 표시 제한 지침",
+    title: "보안 문서 열람 안내문",
     description: "한자 없이 정리된 안내문 샘플입니다.",
     watermarkText: "공지",
     buildHtml(metadata) {
-      const title = metadataText(metadata.title, "[긴급 공고] 인류 문명 수호를 위한 영역 표시 제한 지침");
-      const issuer = metadataText(metadata.issuer, "전국 골목길 평화 유지 위원회");
-      const recipient = metadataText(metadata.recipientName, "노상 방출 행위자");
+      const title = metadataText(metadata.title, "보안 문서 열람 안내문");
+      const issuer = metadataText(metadata.issuer, "문서 발행 기관");
+      const recipient = metadataText(metadata.recipientName, "수신자");
 
       return `<h1>${title}</h1>
 <p>수신: ${recipient}</p>
-<p>본 공고문은 현대 문명 사회의 품격을 유지하고, 인류가 직립 보행을 시작한 이래 쌓아온 도덕적 가치를 보존하기 위해 작성되었습니다. 특정 구역에서 발생하는 자연의 부름에 대한 무단 응답 행위를 엄격히 규제하오니 적극 협조 바랍니다.</p>
-<h2>제1조 [목적]</h2>
-<p>본 지침은 특정 골목 및 담벼락을 야생 동물의 영역 표시 구역으로 오인하는 일부 보행자들의 착각을 바로잡고, 인근 주민들의 후각적 생존권을 보장하는 데 목적이 있다.</p>
-<h2>제2조 [대상 정의]</h2>
-<p>노상 방출 행위자라 함은 화장실이라는 인류 최고의 발명품을 뒤로한 채, 차가운 콘크리트 벽면이나 전신주를 상대로 자신의 생체 에너지를 쏟아붓는 자를 말한다.</p>
-<h2>제3조 [방출 행위의 과학적 고찰]</h2>
+<p>본 안내문은 암호화된 HTML 보안 문서를 안전하게 열람하고 관리하기 위한 기본 절차를 안내하기 위해 작성되었습니다.</p>
+<h2>제1조 [열람 준비]</h2>
 <ul>
-  <li>화학적 테러: 배출 액체 속 암모니아 NH3 수치는 벽면의 페인트를 부식시키며 건물 노후화의 주범이 된다.</li>
-  <li>영역 표시의 오해: 본 구역은 귀하의 사유지가 아니며, 배설물을 뿌린다고 해서 부동산 소유권이 이전되지 않는다.</li>
+  <li>문서 파일과 PIN은 서로 다른 경로로 전달받는 것을 권장합니다.</li>
+  <li>문서 열람 전 파일 출처와 발행자를 확인해 주십시오.</li>
+  <li>공용 PC 또는 신뢰할 수 없는 환경에서는 열람을 피하는 것이 좋습니다.</li>
 </ul>
-<h2>제4조 [방출자 수칙 및 경고]</h2>
+<h2>제2조 [열람 절차]</h2>
 <ul>
-  <li>CCTV의 눈: 본 구역의 CCTV는 4K 초고화질로 귀하의 표정 변화를 기록하고 있다.</li>
-  <li>생물학적 역습: 방수 코팅 및 반사 기술로 인해 액체가 신발이나 바지로 100% 되돌아갈 수 있다.</li>
-  <li>조상님의 감시: 지퍼를 내리는 순간 하늘의 조상님들이 이번 달 운세를 대흉으로 수정할 가능성이 높다.</li>
+  <li>발행자가 전달한 HTML 파일을 브라우저에서 엽니다.</li>
+  <li>별도로 안내받은 6자리 이상 15자리 이내 PIN을 입력합니다.</li>
+  <li>열람 후에는 브라우저 탭을 닫고 필요 시 다운로드 파일을 안전한 위치에 보관합니다.</li>
 </ul>
-<h2>제5조 [권장 사항]</h2>
-<p>급박한 사정이 있을 경우 괄약근의 힘을 1.5배 강화하여 인근 개방 화장실까지 경보로 이동할 것을 권장한다. 이동 중 참을 인 자를 세 번 외치면 인내심 수치가 5% 상승한다는 통계가 있다.</p>
-<h2>제6조 [위반 시 조치]</h2>
+<h2>제3조 [보안 유의 사항]</h2>
 <ul>
-  <li>해당 구역 암모니아 향수, 일명 Scent of Regret을 1분간 깊게 들이마시기</li>
-  <li>청소 도구를 지참하여 본인의 흔적을 120% 제거하고 광택 작업 실시</li>
-  <li>지나가는 행인 10명에게 저는 아직 문명인이 되지 못했습니다라고 고해성사하기</li>
+  <li>PIN을 문서 파일명, 이메일 제목, 메신저 대화방 이름 등에 함께 남기지 마십시오.</li>
+  <li>PIN이 외부에 노출되었다고 판단되면 발행자에게 재발행을 요청하십시오.</li>
+  <li>문서 내용은 열람 권한이 있는 사람에게만 공유하십시오.</li>
 </ul>
-<p>귀하의 방광은 소중하지만, 우리의 코는 더 소중합니다.</p>
 <p>[${issuer}]</p>`;
     }
   },
@@ -237,20 +229,6 @@ function compactPrivateMeta(metadata: MetadataState): SecureDocPlainContent["pri
     watermarkText: metadata.watermarkText || undefined,
     recipientName: metadata.recipientName || undefined,
     documentNumber: metadata.documentNumber || undefined
-  };
-}
-
-function normalizeMetadata(metadata: MetadataState): MetadataState {
-  return {
-    ...metadata,
-    title: removeUnsupportedEditorCharacters(metadata.title),
-    issuer: removeUnsupportedEditorCharacters(metadata.issuer),
-    description: removeUnsupportedEditorCharacters(metadata.description),
-    displayExpiresAt: removeUnsupportedEditorCharacters(metadata.displayExpiresAt),
-    watermarkText: removeUnsupportedEditorCharacters(metadata.watermarkText),
-    recipientName: removeUnsupportedEditorCharacters(metadata.recipientName),
-    documentNumber: removeUnsupportedEditorCharacters(metadata.documentNumber),
-    createdBy: removeUnsupportedEditorCharacters(metadata.createdBy)
   };
 }
 
@@ -324,19 +302,6 @@ export function App(): ReactElement {
     }
   }
 
-  function normalizeMetadataField<K extends keyof MetadataState>(key: K): void {
-    const currentValue = metadata[key];
-    if (typeof currentValue !== "string") {
-      return;
-    }
-
-    const normalizedValue = removeUnsupportedEditorCharacters(currentValue) as MetadataState[K];
-    if (normalizedValue === currentValue) {
-      return;
-    }
-    updateMetadata(key, normalizedValue);
-  }
-
   function handleDocumentTypeChange(docType: DocumentType): void {
     const preset = documentPresets[docType];
     const nextMetadata: MetadataState = {
@@ -405,8 +370,7 @@ export function App(): ReactElement {
       if (!window.secureDoc) {
         throw new Error("Electron desktop bridge is not available.");
       }
-      const publishMetadata = normalizeMetadata(metadata);
-      setMetadata(publishMetadata);
+      const publishMetadata = metadata;
 
       if (!publishMetadata.title.trim()) {
         throw new Error("문서 제목을 입력하세요.");
@@ -503,19 +467,11 @@ export function App(): ReactElement {
           <div className="form-grid">
             <label>
               문서 제목
-              <input
-                value={metadata.title}
-                onChange={(event) => updateMetadata("title", event.target.value)}
-                onBlur={() => normalizeMetadataField("title")}
-              />
+              <input value={metadata.title} onChange={(event) => updateMetadata("title", event.target.value)} />
             </label>
             <label>
               갑/발행자
-              <input
-                value={metadata.issuer}
-                onChange={(event) => updateMetadata("issuer", event.target.value)}
-                onBlur={() => normalizeMetadataField("issuer")}
-              />
+              <input value={metadata.issuer} onChange={(event) => updateMetadata("issuer", event.target.value)} />
             </label>
             <label>
               문서 유형
@@ -537,43 +493,23 @@ export function App(): ReactElement {
             </label>
             <label>
               을/수신자명
-              <input
-                value={metadata.recipientName}
-                onChange={(event) => updateMetadata("recipientName", event.target.value)}
-                onBlur={() => normalizeMetadataField("recipientName")}
-              />
+              <input value={metadata.recipientName} onChange={(event) => updateMetadata("recipientName", event.target.value)} />
             </label>
             <label>
               문서번호
-              <input
-                value={metadata.documentNumber}
-                onChange={(event) => updateMetadata("documentNumber", event.target.value)}
-                onBlur={() => normalizeMetadataField("documentNumber")}
-              />
+              <input value={metadata.documentNumber} onChange={(event) => updateMetadata("documentNumber", event.target.value)} />
             </label>
             <label className="wide">
               문서 설명
-              <input
-                value={metadata.description}
-                onChange={(event) => updateMetadata("description", event.target.value)}
-                onBlur={() => normalizeMetadataField("description")}
-              />
+              <input value={metadata.description} onChange={(event) => updateMetadata("description", event.target.value)} />
             </label>
             <label>
               워터마크 문구
-              <input
-                value={metadata.watermarkText}
-                onChange={(event) => updateMetadata("watermarkText", event.target.value)}
-                onBlur={() => normalizeMetadataField("watermarkText")}
-              />
+              <input value={metadata.watermarkText} onChange={(event) => updateMetadata("watermarkText", event.target.value)} />
             </label>
             <label>
               발행 작업자
-              <input
-                value={metadata.createdBy}
-                onChange={(event) => updateMetadata("createdBy", event.target.value)}
-                onBlur={() => normalizeMetadataField("createdBy")}
-              />
+              <input value={metadata.createdBy} onChange={(event) => updateMetadata("createdBy", event.target.value)} />
             </label>
           </div>
         </section>
