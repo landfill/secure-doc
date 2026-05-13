@@ -611,8 +611,6 @@ export function App(): ReactElement {
                 value={pin}
                 onChange={(event) => setPin(normalizePinInput(event.target.value))}
                 type={showPin ? "text" : "password"}
-                minLength={PIN_MIN_LENGTH}
-                maxLength={PIN_MAX_LENGTH}
                 autoComplete="one-time-code"
               />
             </label>
@@ -622,8 +620,6 @@ export function App(): ReactElement {
                 value={pinConfirm}
                 onChange={(event) => setPinConfirm(normalizePinInput(event.target.value))}
                 type={showPin ? "text" : "password"}
-                minLength={PIN_MIN_LENGTH}
-                maxLength={PIN_MAX_LENGTH}
                 autoComplete="one-time-code"
               />
             </label>

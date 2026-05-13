@@ -85,10 +85,32 @@ test("does not expose plaintext body or PIN in the package HTML", async () => {
   assert.equal(html.includes(pin), false);
   assert.match(html, /connect-src 'none'/);
   assert.match(html, /type="password"/);
-  assert.match(html, /minlength="6"/);
-  assert.match(html, /maxlength="15"/);
+  assert.doesNotMatch(html, /minlength=/);
+  assert.doesNotMatch(html, /maxlength=/);
   assert.doesNotMatch(html, /pattern=/);
   assert.doesNotMatch(html, /type="number"/);
+});
+
+test("supports non-BMP PINs without native UTF-16 length truncation in the viewer", async () => {
+  const emojiPin = "😀😁😂🤣😃😄😅😆";
+  const pkg = await issueSecureDocument({
+    content,
+    pin: emojiPin,
+    iterations: 1000,
+    metadata: {
+      id: "doc_20260512_emoji",
+      title: "보안문서",
+      issuer: "회사명",
+      issuedAt: "2026-05-12T09:00:00+09:00"
+    }
+  });
+
+  const unlocked = await unlockSecureDocument(emojiPin, pkg);
+  const html = buildSecureHtmlDocument(pkg);
+
+  assert.equal(unlocked.html, content.html);
+  assert.doesNotMatch(html, /minlength=/);
+  assert.doesNotMatch(html, /maxlength=/);
 });
 
 test("creates different salt, IVs, and wrapped DEKs for the same PIN", async () => {

@@ -9,7 +9,7 @@
 ## Key Changes
 - Admin 앱은 macOS Apple Silicon/Intel universal DMG와 Windows x64 NSIS 설치 파일로 각각 빌드한다.
 - 입력 PIN은 6자리 이상 15자리 이내 문자열이며, 숫자, 문자, 기호를 허용한다.
-- PIN 입력은 `type="password"`, `minlength=6`, `maxlength=15`를 사용하고 `type="number"`는 사용하지 않는다.
+- PIN 입력은 `type="password"`를 사용하고 `type="number"`는 사용하지 않는다. 6-15자 검증은 UTF-16 code unit 기준의 네이티브 `minlength`/`maxlength`가 아니라 JS 정책 검사에서 code point 기준으로 수행한다.
 - 자동 PIN 생성은 `crypto.getRandomValues()` 기반 균등 난수로 수행한다.
 - 직접 입력 시 `000000`, `aaaaaa`, `123456`, `654321` 같은 명백한 취약 PIN은 차단한다.
 - UI 문구는 "키 강도 검사"가 아니라 "PIN 정책 검사"로 표현한다.

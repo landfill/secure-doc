@@ -195,7 +195,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
         <p>이 문서는 암호화되어 있습니다. 별도 안내받은 ${pinHelpText}을 입력하세요.</p>
         <label>
           문서 열람 PIN
-          <input id="pin-input" name="pin" type="password" minlength="${PIN_MIN_LENGTH}" maxlength="${PIN_MAX_LENGTH}" autocomplete="one-time-code" required>
+          <input id="pin-input" name="pin" type="password" autocomplete="one-time-code" required>
         </label>
         <button id="unlock-button" type="submit">열람하기</button>
         <p id="status" class="status" aria-live="polite"></p>
