@@ -31,6 +31,7 @@ const ALLOWED_TAGS = new Set([
 ]);
 
 const REMOVED_TAGS = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "FORM", "INPUT", "BUTTON"]);
+const UNSUPPORTED_EDITOR_CHARACTERS = /[\p{Script=Han}\uF900-\uFAFF]/gu;
 
 const ALLOWED_ATTRS: Record<string, Set<string>> = {
   A: new Set(["href", "title"]),
@@ -47,9 +48,14 @@ function isSafeUrl(value: string, imageOnly: boolean): boolean {
   return /^(https:|mailto:|tel:)/i.test(trimmed);
 }
 
+export function removeUnsupportedEditorCharacters(input: string): string {
+  return input.normalize("NFKC").replace(UNSUPPORTED_EDITOR_CHARACTERS, "");
+}
+
 function cleanNode(node: ParentNode): void {
   for (const child of Array.from(node.childNodes)) {
     if (child.nodeType === Node.TEXT_NODE) {
+      child.textContent = removeUnsupportedEditorCharacters(child.textContent ?? "");
       continue;
     }
 
@@ -102,4 +108,3 @@ export function stripHtml(input: string): string {
   template.innerHTML = input;
   return template.content.textContent?.trim() ?? "";
 }
-

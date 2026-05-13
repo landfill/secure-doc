@@ -1,4 +1,5 @@
 import { PACKAGE_SCHEMA, PACKAGE_VERSION, PUBLIC_UNLOCK_ERROR, type SecureDocPackage } from "./securePackage.ts";
+import { PIN_MAX_LENGTH, PIN_MIN_LENGTH } from "./pinPolicy.ts";
 
 export const VIEWER_CSP = [
   "default-src 'none'",
@@ -35,6 +36,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
   const issuer = escapeHtml(securePackage.doc.issuer || "");
   const issuedAt = escapeHtml(securePackage.doc.issuedAt || "");
   const expiresAt = securePackage.doc.displayExpiresAt ? escapeHtml(securePackage.doc.displayExpiresAt) : "";
+  const pinHelpText = `${PIN_MIN_LENGTH}자리 이상 ${PIN_MAX_LENGTH}자리 이내 PIN`;
   const packageJson = escapeJsonForScript(securePackage);
 
   return `<!doctype html>
@@ -190,10 +192,10 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     <main>
       <form id="unlock-form" class="unlock" autocomplete="off">
         <h2>보안문서 열람</h2>
-        <p>이 문서는 암호화되어 있습니다. 별도 안내받은 6자리 숫자 PIN을 입력하세요.</p>
+        <p>이 문서는 암호화되어 있습니다. 별도 안내받은 ${pinHelpText}을 입력하세요.</p>
         <label>
           문서 열람 PIN
-          <input id="pin-input" name="pin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" required>
+          <input id="pin-input" name="pin" type="password" autocomplete="one-time-code" required>
         </label>
         <button id="unlock-button" type="submit">열람하기</button>
         <p id="status" class="status" aria-live="polite"></p>
@@ -219,6 +221,9 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
   const documentInner = document.getElementById("document-inner");
   const packageNode = document.getElementById("secure-doc-package");
   const pkg = JSON.parse(packageNode.textContent || "{}");
+  const PIN_MIN_LENGTH = ${PIN_MIN_LENGTH};
+  const PIN_MAX_LENGTH = ${PIN_MAX_LENGTH};
+  const CONTROL_CHARACTERS = /[\\u0000-\\u001F\\u007F]/;
 
   function normalizePin(value) {
     return String(value || "").normalize("NFKC").trim();
@@ -286,7 +291,8 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
 
   async function unlock(pinInputValue) {
     const pin = normalizePin(pinInputValue);
-    if (!/^[0-9]{6}$/.test(pin)) {
+    const pinLength = Array.from(pin).length;
+    if (pinLength < PIN_MIN_LENGTH || pinLength > PIN_MAX_LENGTH || CONTROL_CHARACTERS.test(pin)) {
       throw new Error(PUBLIC_ERROR);
     }
 
@@ -338,9 +344,16 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       return /^(https:|mailto:|tel:)/i.test(trimmed);
     }
 
+    function removeUnsupportedEditorCharacters(value) {
+      return String(value || "").normalize("NFKC").replace(/[\\p{Script=Han}\\uF900-\\uFAFF]/gu, "");
+    }
+
     function clean(node) {
       for (const child of Array.from(node.childNodes)) {
-        if (child.nodeType === Node.TEXT_NODE) continue;
+        if (child.nodeType === Node.TEXT_NODE) {
+          child.textContent = removeUnsupportedEditorCharacters(child.textContent);
+          continue;
+        }
         if (child.nodeType !== Node.ELEMENT_NODE) {
           child.remove();
           continue;

@@ -2,14 +2,14 @@
 
 WebCrypto 기반 오프라인 보안문서 발행 및 열람 시스템입니다.
 
-관리자는 Electron 데스크톱 앱에서 문서를 작성하고 6자리 숫자 PIN을 설정해 암호화된 단일 HTML 파일을 발행합니다. 사용자는 발행된 HTML 파일을 브라우저에서 열고, 별도로 전달받은 PIN을 입력해야 문서를 복호화해 볼 수 있습니다.
+관리자는 Electron 데스크톱 앱에서 문서를 작성하고 6자리 이상 15자리 이내 PIN을 설정해 암호화된 단일 HTML 파일을 발행합니다. 사용자는 발행된 HTML 파일을 브라우저에서 열고, 별도로 전달받은 PIN을 입력해야 문서를 복호화해 볼 수 있습니다.
 
 ## 주요 기능
 
 - Electron + React/TypeScript 기반 Admin 발행도구
 - macOS universal DMG, Windows x64 NSIS 설치 파일 생성
 - Tiptap 기반 WYSIWYG 본문 에디터와 HTML 보기 모드
-- 6자리 숫자 PIN 정책 적용
+- 6자리 이상 15자리 이내 PIN 정책 적용
 - `crypto.getRandomValues()` 기반 PIN 자동 생성
 - PBKDF2-HMAC-SHA-256 기반 KEK 유도
 - AES-256-GCM 기반 본문 암호화
@@ -36,7 +36,7 @@ KEK -> DEK wrapping
 PIN이 올바르지 않거나 문서가 손상되었습니다.
 ```
 
-6자리 PIN은 편의형 오프라인 암호입니다. 고보안 문서에는 서버 인증, 전자서명, 신뢰된 로컬 뷰어 앱, OS 코드서명 정책을 함께 사용해야 합니다.
+6자리 이상 15자리 이내 PIN은 편의형 오프라인 암호입니다. 고보안 문서에는 서버 인증, 전자서명, 신뢰된 로컬 뷰어 앱, OS 코드서명 정책을 함께 사용해야 합니다.
 
 ## 요구사항
 
@@ -57,7 +57,7 @@ npm install
 npm run dev
 ```
 
-Electron 앱 시작 시 `Electron uninstall` 또는 `Electron failed to install correctly` 오류가 나오면 Electron 런타임 바이너리가 내려받아지지 않은 상태입니다. 아래 명령으로 복구한 뒤 다시 실행하세요.
+`npm install`은 설치 후 Electron 런타임 바이너리도 내려받습니다. 네트워크, 캐시, 설치 스크립트 차단 때문에 `Electron uninstall` 또는 `Electron failed to install correctly` 오류가 나오면 아래 명령으로 복구한 뒤 다시 실행하세요.
 
 ```bash
 npm run fix:electron

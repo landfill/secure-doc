@@ -1,4 +1,4 @@
-import { assertValidPin, DEFAULT_PIN_KDF_ITERATIONS } from "./pinPolicy.ts";
+import { assertValidPin, DEFAULT_PIN_KDF_ITERATIONS, PIN_MAX_LENGTH, PIN_MIN_LENGTH } from "./pinPolicy.ts";
 import { base64UrlToBytes, bytesEqual, bytesToBase64Url, utf8Decode, utf8Encode } from "./encoding.ts";
 
 export const PACKAGE_SCHEMA = "com.company.secure-html-doc";
@@ -60,12 +60,13 @@ export interface SecureDocPackage {
   };
   ui: {
     keyLabel: "문서 열람 PIN";
-    helpText: "별도 안내받은 6자리 숫자 PIN을 입력하세요.";
+    helpText: "별도 안내받은 6자리 이상 15자리 이내 PIN을 입력하세요.";
     keyPolicy: {
-      type: "numeric-pin";
-      length: 6;
+      type: "pin-code";
+      minLength: typeof PIN_MIN_LENGTH;
+      maxLength: typeof PIN_MAX_LENGTH;
       normalization: "nfkc-trim";
-      allowLeadingZero: true;
+      allowedCharacters: "printable";
     };
     watermark: boolean;
   };
@@ -231,12 +232,13 @@ export async function issueSecureDocument(options: IssueSecureDocumentOptions): 
     },
     ui: {
       keyLabel: "문서 열람 PIN",
-      helpText: "별도 안내받은 6자리 숫자 PIN을 입력하세요.",
+      helpText: "별도 안내받은 6자리 이상 15자리 이내 PIN을 입력하세요.",
       keyPolicy: {
-        type: "numeric-pin",
-        length: 6,
+        type: "pin-code",
+        minLength: PIN_MIN_LENGTH,
+        maxLength: PIN_MAX_LENGTH,
         normalization: "nfkc-trim",
-        allowLeadingZero: true
+        allowedCharacters: "printable"
       },
       watermark: Boolean(options.content.privateMeta?.watermarkText)
     }

@@ -1,15 +1,16 @@
 {
   "name": "secure-doc-admin",
   "version": "0.1.0",
-  "description": "Offline secure document issuer and viewer using WebCrypto and 6-digit PINs",
+  "description": "Offline secure document issuer and viewer using WebCrypto and 6-15 character PINs",
   "author": "Secure Doc Team",
   "main": "out/main/main.js",
   "type": "module",
   "scripts": {
+    "postinstall": "node scripts/install-electron-runtime.mjs",
     "dev": "electron-vite dev",
     "build": "tsc --noEmit && electron-vite build",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
-    "fix:electron": "npx install-electron --no",
+    "fix:electron": "node scripts/install-electron-runtime.mjs",
     "make:mac": "npm run build && electron-builder --mac dmg --universal",
     "make:win": "npm run build && electron-builder --win nsis --x64"
   },
