@@ -448,18 +448,31 @@ export function App(): ReactElement {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">WebCrypto Offline Secure Document</p>
-          <h1>Secure Doc Admin</h1>
-        </div>
-        <div className="platforms" aria-label="배포 대상">
-          <span>macOS universal</span>
-          <span>Windows x64</span>
-        </div>
-      </header>
+      <aside className="sidebar" aria-label="관리 메뉴">
+        <div className="brand">Secure Doc</div>
+        <nav className="nav">
+          <a href="#" className="active">문서 발행</a>
+          <a href="#">발행 이력</a>
+          <a href="#">보안 정책</a>
+          <span className="group-label">배포 대상</span>
+          <a href="#">macOS universal</a>
+          <a href="#">Windows x64</a>
+        </nav>
+      </aside>
 
-      <main className="workspace">
+      <main className="main-column">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">WebCrypto Offline Secure Document</p>
+            <h1>Secure Doc Admin</h1>
+          </div>
+          <div className="platforms" aria-label="작업 상태">
+            <span>Offline</span>
+            <span>AES-256-GCM</span>
+          </div>
+        </header>
+
+        <div className="workspace">
         <section className="panel metadata-panel" aria-labelledby="metadata-heading">
           <div className="section-heading">
             <h2 id="metadata-heading">문서 기본정보</h2>
@@ -517,6 +530,8 @@ export function App(): ReactElement {
         <section className="panel editor-panel" aria-labelledby="editor-heading">
           <div className="section-heading">
             <h2 id="editor-heading">암호화 본문 작성</h2>
+          </div>
+          <div className="editor-toolbar-row">
             <div className="editor-actions">
               <div className="mode-toggle" aria-label="본문 작성 모드">
                 <button
@@ -573,9 +588,9 @@ export function App(): ReactElement {
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBulletList().run() ?? false)}
               >
-                List
-              </button>
-            </div>
+                  List
+                </button>
+              </div>
             </div>
           </div>
           {editorMode === "visual" ? (
@@ -692,6 +707,7 @@ export function App(): ReactElement {
             </table>
           </div>
         </section>
+        </div>
       </main>
     </div>
   );
