@@ -47,7 +47,7 @@ function escapeTemplateValue(value: string): string {
 }
 
 function metadataText(value: string, fallback: string): string {
-  return escapeTemplateValue(value.trim() || fallback);
+  return escapeTemplateValue(removeUnsupportedEditorCharacters(value).trim() || fallback);
 }
 
 const documentPresets: Record<DocumentType, DocumentPreset> = {
@@ -223,7 +223,7 @@ const presetBodyMetadataKeys = new Set<keyof MetadataState>([
 ]);
 
 function normalizePinInput(value: string): string {
-  return [...value.normalize("NFKC")].slice(0, PIN_MAX_LENGTH).join("");
+  return [...value].slice(0, PIN_MAX_LENGTH).join("");
 }
 
 function safeFileNamePart(value: string): string {
@@ -237,6 +237,20 @@ function compactPrivateMeta(metadata: MetadataState): SecureDocPlainContent["pri
     watermarkText: metadata.watermarkText || undefined,
     recipientName: metadata.recipientName || undefined,
     documentNumber: metadata.documentNumber || undefined
+  };
+}
+
+function normalizeMetadata(metadata: MetadataState): MetadataState {
+  return {
+    ...metadata,
+    title: removeUnsupportedEditorCharacters(metadata.title),
+    issuer: removeUnsupportedEditorCharacters(metadata.issuer),
+    description: removeUnsupportedEditorCharacters(metadata.description),
+    displayExpiresAt: removeUnsupportedEditorCharacters(metadata.displayExpiresAt),
+    watermarkText: removeUnsupportedEditorCharacters(metadata.watermarkText),
+    recipientName: removeUnsupportedEditorCharacters(metadata.recipientName),
+    documentNumber: removeUnsupportedEditorCharacters(metadata.documentNumber),
+    createdBy: removeUnsupportedEditorCharacters(metadata.createdBy)
   };
 }
 
@@ -269,12 +283,7 @@ export function App(): ReactElement {
     content: initialEditorHtml,
     immediatelyRender: false,
     onUpdate({ editor: currentEditor }) {
-      const currentHtml = currentEditor.getHTML();
-      const sanitizedHtml = sanitizeHtml(currentHtml);
-      if (sanitizedHtml !== currentHtml) {
-        currentEditor.commands.setContent(sanitizedHtml, { emitUpdate: false });
-      }
-      setEditorHtml(sanitizedHtml);
+      setEditorHtml(currentEditor.getHTML());
       if (!programmaticEditorUpdateRef.current) {
         setSyncPresetWithMetadata(false);
       }
@@ -304,16 +313,28 @@ export function App(): ReactElement {
   }
 
   function updateMetadata<K extends keyof MetadataState>(key: K, value: MetadataState[K]): void {
-    const normalizedValue = typeof value === "string" ? removeUnsupportedEditorCharacters(value) : value;
     const nextMetadata = {
       ...metadata,
-      [key]: normalizedValue
+      [key]: value
     } as MetadataState;
 
     setMetadata(nextMetadata);
     if (syncPresetWithMetadata && presetBodyMetadataKeys.has(key)) {
       replaceEditorHtml(buildPresetHtml(nextMetadata));
     }
+  }
+
+  function normalizeMetadataField<K extends keyof MetadataState>(key: K): void {
+    const currentValue = metadata[key];
+    if (typeof currentValue !== "string") {
+      return;
+    }
+
+    const normalizedValue = removeUnsupportedEditorCharacters(currentValue) as MetadataState[K];
+    if (normalizedValue === currentValue) {
+      return;
+    }
+    updateMetadata(key, normalizedValue);
   }
 
   function handleDocumentTypeChange(docType: DocumentType): void {
@@ -384,10 +405,13 @@ export function App(): ReactElement {
       if (!window.secureDoc) {
         throw new Error("Electron desktop bridge is not available.");
       }
-      if (!metadata.title.trim()) {
+      const publishMetadata = normalizeMetadata(metadata);
+      setMetadata(publishMetadata);
+
+      if (!publishMetadata.title.trim()) {
         throw new Error("문서 제목을 입력하세요.");
       }
-      if (!metadata.issuer.trim()) {
+      if (!publishMetadata.issuer.trim()) {
         throw new Error("발행자를 입력하세요.");
       }
       if (!pinResult.valid) {
@@ -407,23 +431,23 @@ export function App(): ReactElement {
         format: "html",
         html: sanitizedPreview,
         assets: [],
-        privateMeta: compactPrivateMeta(metadata)
+        privateMeta: compactPrivateMeta(publishMetadata)
       };
 
       const securePackage = await issueSecureDocument({
         content,
         pin: pinResult.normalizedPin,
         metadata: {
-          title: metadata.title.trim(),
-          issuer: metadata.issuer.trim(),
+          title: publishMetadata.title.trim(),
+          issuer: publishMetadata.issuer.trim(),
           issuedAt,
-          displayExpiresAt: metadata.displayExpiresAt || undefined
+          displayExpiresAt: publishMetadata.displayExpiresAt || undefined
         },
         iterations
       });
 
       const html = buildSecureHtmlDocument(securePackage);
-      const suggestedFileName = `${securePackage.doc.id}-${safeFileNamePart(metadata.title)}.html`;
+      const suggestedFileName = `${securePackage.doc.id}-${safeFileNamePart(publishMetadata.title)}.html`;
       const saveResult = await window.secureDoc.savePackage({
         suggestedFileName,
         html,
@@ -436,7 +460,7 @@ export function App(): ReactElement {
           kdf: "PBKDF2-HMAC-SHA-256",
           iterations,
           contentAlg: "AES-256-GCM",
-          createdBy: metadata.createdBy.trim() || "admin"
+          createdBy: publishMetadata.createdBy.trim() || "admin"
         }
       });
 
@@ -479,11 +503,19 @@ export function App(): ReactElement {
           <div className="form-grid">
             <label>
               문서 제목
-              <input value={metadata.title} onChange={(event) => updateMetadata("title", event.target.value)} />
+              <input
+                value={metadata.title}
+                onChange={(event) => updateMetadata("title", event.target.value)}
+                onBlur={() => normalizeMetadataField("title")}
+              />
             </label>
             <label>
               갑/발행자
-              <input value={metadata.issuer} onChange={(event) => updateMetadata("issuer", event.target.value)} />
+              <input
+                value={metadata.issuer}
+                onChange={(event) => updateMetadata("issuer", event.target.value)}
+                onBlur={() => normalizeMetadataField("issuer")}
+              />
             </label>
             <label>
               문서 유형
@@ -505,23 +537,43 @@ export function App(): ReactElement {
             </label>
             <label>
               을/수신자명
-              <input value={metadata.recipientName} onChange={(event) => updateMetadata("recipientName", event.target.value)} />
+              <input
+                value={metadata.recipientName}
+                onChange={(event) => updateMetadata("recipientName", event.target.value)}
+                onBlur={() => normalizeMetadataField("recipientName")}
+              />
             </label>
             <label>
               문서번호
-              <input value={metadata.documentNumber} onChange={(event) => updateMetadata("documentNumber", event.target.value)} />
+              <input
+                value={metadata.documentNumber}
+                onChange={(event) => updateMetadata("documentNumber", event.target.value)}
+                onBlur={() => normalizeMetadataField("documentNumber")}
+              />
             </label>
             <label className="wide">
               문서 설명
-              <input value={metadata.description} onChange={(event) => updateMetadata("description", event.target.value)} />
+              <input
+                value={metadata.description}
+                onChange={(event) => updateMetadata("description", event.target.value)}
+                onBlur={() => normalizeMetadataField("description")}
+              />
             </label>
             <label>
               워터마크 문구
-              <input value={metadata.watermarkText} onChange={(event) => updateMetadata("watermarkText", event.target.value)} />
+              <input
+                value={metadata.watermarkText}
+                onChange={(event) => updateMetadata("watermarkText", event.target.value)}
+                onBlur={() => normalizeMetadataField("watermarkText")}
+              />
             </label>
             <label>
               발행 작업자
-              <input value={metadata.createdBy} onChange={(event) => updateMetadata("createdBy", event.target.value)} />
+              <input
+                value={metadata.createdBy}
+                onChange={(event) => updateMetadata("createdBy", event.target.value)}
+                onBlur={() => normalizeMetadataField("createdBy")}
+              />
             </label>
           </div>
         </section>
@@ -598,7 +650,7 @@ export function App(): ReactElement {
               value={editorHtml}
               spellCheck={false}
               onChange={(event) => {
-                setEditorHtml(removeUnsupportedEditorCharacters(event.target.value));
+                setEditorHtml(event.target.value);
                 setSyncPresetWithMetadata(false);
               }}
             />
