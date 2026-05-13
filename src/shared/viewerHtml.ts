@@ -141,12 +141,17 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     }
     .document {
       display: none;
+      position: relative;
       padding: 32px 0;
       line-height: 1.7;
       background: #fff;
       border-top: 4px solid #155eef;
+      overflow: hidden;
+      isolation: isolate;
     }
     .document-inner {
+      position: relative;
+      z-index: 1;
       width: min(820px, calc(100% - 40px));
       margin: 0 auto;
     }
@@ -162,6 +167,27 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     .document-inner img {
       max-width: 100%;
       height: auto;
+    }
+    .watermark {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      color: rgba(24, 32, 47, 0.08);
+      font-size: clamp(44px, 12vw, 132px);
+      font-weight: 800;
+      letter-spacing: 0;
+      line-height: 1;
+      text-align: center;
+      transform: rotate(-28deg);
+      user-select: none;
+      white-space: nowrap;
+    }
+    .watermark.visible {
+      display: flex;
     }
     body.unlocked main {
       width: 100%;
@@ -202,6 +228,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
         <p id="error" class="error" aria-live="assertive"></p>
       </form>
       <section id="document" class="document" aria-live="polite">
+        <div id="watermark" class="watermark" aria-hidden="true"></div>
         <div id="document-inner" class="document-inner"></div>
       </section>
     </main>
@@ -219,6 +246,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
   const status = document.getElementById("status");
   const error = document.getElementById("error");
   const documentInner = document.getElementById("document-inner");
+  const watermark = document.getElementById("watermark");
   const packageNode = document.getElementById("secure-doc-package");
   const pkg = JSON.parse(packageNode.textContent || "{}");
   const PIN_MIN_LENGTH = ${PIN_MIN_LENGTH};
@@ -394,6 +422,9 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     try {
       const content = await unlock(pinInput.value);
       documentInner.innerHTML = sanitizeHtml(content.html);
+      const watermarkText = String(content.privateMeta && content.privateMeta.watermarkText || "").trim();
+      watermark.textContent = watermarkText;
+      watermark.classList.toggle("visible", Boolean(watermarkText));
       pinInput.value = "";
       status.textContent = "";
       document.body.classList.add("unlocked");

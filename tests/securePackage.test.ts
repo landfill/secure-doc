@@ -113,6 +113,34 @@ test("supports non-BMP PINs without native UTF-16 length truncation in the viewe
   assert.doesNotMatch(html, /maxlength=/);
 });
 
+test("renders watermark layer after unlock without exposing watermark text before unlock", async () => {
+  const watermarkedContent: SecureDocPlainContent = {
+    ...content,
+    privateMeta: {
+      watermarkText: "CONFIDENTIAL"
+    }
+  };
+  const pkg = await issueSecureDocument({
+    content: watermarkedContent,
+    pin,
+    iterations: 1000,
+    metadata: {
+      id: "doc_20260512_watermark",
+      title: "보안문서",
+      issuer: "회사명",
+      issuedAt: "2026-05-12T09:00:00+09:00"
+    }
+  });
+
+  const html = buildSecureHtmlDocument(pkg);
+
+  assert.equal(pkg.ui.watermark, true);
+  assert.equal(html.includes("CONFIDENTIAL"), false);
+  assert.match(html, /id="watermark"/);
+  assert.match(html, /watermark\.textContent = watermarkText/);
+  assert.match(html, /watermark\.classList\.toggle\("visible", Boolean\(watermarkText\)\)/);
+});
+
 test("creates different salt, IVs, and wrapped DEKs for the same PIN", async () => {
   const first = await issueSecureDocument({
     content,
