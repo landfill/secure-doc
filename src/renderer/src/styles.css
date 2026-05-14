@@ -172,7 +172,7 @@ button.primary {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 410px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -186,14 +186,6 @@ button.primary {
 .editor-panel,
 .history-panel {
   grid-column: 1;
-}
-
-.security-panel {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: start;
-  position: sticky;
-  top: 16px;
 }
 
 .section-heading {
@@ -213,15 +205,35 @@ button.primary {
   letter-spacing: 0;
 }
 
+.metadata-panel .section-heading {
+  min-height: 44px;
+  padding: 10px 14px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  padding: 18px;
+  gap: 10px;
+  padding: 14px;
 }
 
-.security-panel .form-grid {
-  grid-template-columns: 1fr;
+.metadata-panel .form-grid {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+.document-meta-grid {
+  grid-template-areas:
+    "type type title title title title title title title title title title"
+    "issuer issuer issuer recipient recipient recipient number number date date watermark watermark";
+}
+
+.metadata-panel label {
+  gap: 5px;
+}
+
+.metadata-panel input,
+.metadata-panel select {
+  height: 34px;
 }
 
 label {
@@ -234,6 +246,55 @@ label {
 
 label.wide {
   grid-column: 1 / -1;
+}
+
+.field-title {
+  grid-area: title;
+}
+
+.field-type {
+  grid-area: type;
+}
+
+.field-issuer {
+  grid-area: issuer;
+}
+
+.field-recipient {
+  grid-area: recipient;
+}
+
+.field-number {
+  grid-area: number;
+}
+
+.field-date {
+  grid-area: date;
+}
+
+.field-watermark {
+  grid-area: watermark;
+}
+
+.admin-meta-details {
+  border-top: 1px solid var(--border);
+  padding: 0 14px 14px;
+}
+
+.admin-meta-details summary {
+  width: fit-content;
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr);
+  gap: 10px;
+  margin-top: 10px;
 }
 
 input,
@@ -266,17 +327,127 @@ select:focus,
 
 .toolbar {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
   flex-wrap: wrap;
+  row-gap: 4px;
 }
 
-.toolbar button {
-  min-width: 38px;
-  padding: 0 9px;
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  gap: 2px;
+  padding: 0 6px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.toolbar-section:last-child {
+  border-right: 0;
+}
+
+.toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-width: 32px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0;
+  color: #c9c7d2;
+  background: transparent;
   font-weight: 800;
 }
 
-.toolbar button.active,
+.toolbar-button:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.toolbar-button:disabled {
+  opacity: 0.38;
+}
+
+.toolbar-button.active {
+  color: #ffffff;
+  background: #6d28d9;
+}
+
+.toolbar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.toolbar-align-icon {
+  display: grid;
+  align-content: center;
+  width: 18px;
+  height: 18px;
+  row-gap: 3px;
+  color: currentColor;
+}
+
+.toolbar-align-icon span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.toolbar-button[data-format="align-left"] .toolbar-align-icon span:nth-child(even) {
+  width: 12px;
+}
+
+.toolbar-button[data-format="align-center"] .toolbar-align-icon span:nth-child(even) {
+  width: 12px;
+  margin-inline: auto;
+}
+
+.toolbar-button[data-format="align-right"] .toolbar-align-icon span:nth-child(even) {
+  width: 12px;
+  margin-left: auto;
+}
+
+.toolbar-button[data-format="bold"] .toolbar-icon {
+  font-weight: 900;
+}
+
+.toolbar-button[data-format="italic"] .toolbar-icon {
+  font-style: italic;
+}
+
+.toolbar-button[data-format="underline"] .toolbar-icon {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.toolbar-button[data-format="strike"] .toolbar-icon {
+  text-decoration: line-through;
+}
+
+.block-style-select {
+  width: auto;
+  min-width: 60px;
+  height: 34px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 28px 0 12px;
+  color: #ffffff;
+  background: #22212b;
+  font-weight: 700;
+}
+
 .mode-toggle button.active {
   border-color: var(--accent-border);
   color: var(--accent);
@@ -285,19 +456,19 @@ select:focus,
 
 .editor-toolbar-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   border-bottom: 1px solid var(--border);
-  padding: 10px 18px;
-  background: var(--surface-warm);
+  padding: 8px;
+  background: #101017;
+  overflow: visible;
 }
 
 .editor-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   width: 100%;
+  min-width: 0;
 }
 
 .mode-toggle {
@@ -307,6 +478,10 @@ select:focus,
 
 .mode-toggle button {
   min-width: 72px;
+}
+
+.editor-mode-toggle button {
+  height: 32px;
 }
 
 .editor {
@@ -362,15 +537,88 @@ select:focus,
   letter-spacing: 0;
 }
 
+.rich-editor .tiptap h3,
+.preview h3 {
+  margin: 18px 0 10px;
+  font-size: 19px;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
 .rich-editor .tiptap p,
 .preview p {
   margin: 0 0 12px;
 }
 
 .rich-editor .tiptap ul,
-.preview ul {
+.rich-editor .tiptap ol,
+.preview ul,
+.preview ol {
   margin: 0 0 12px;
   padding-left: 24px;
+}
+
+.rich-editor .tiptap blockquote,
+.preview blockquote {
+  margin: 0 0 12px;
+  border-left: 4px solid var(--border-hover);
+  padding: 4px 0 4px 12px;
+  color: var(--muted);
+}
+
+.rich-editor .tiptap pre,
+.preview pre {
+  margin: 0 0 12px;
+  overflow-x: auto;
+  border-radius: 6px;
+  padding: 12px;
+  color: #f8fafc;
+  background: #1f2937;
+}
+
+.rich-editor .tiptap code,
+.preview code {
+  border-radius: 4px;
+  padding: 2px 4px;
+  background: var(--accent-soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.rich-editor .tiptap pre code,
+.preview pre code {
+  padding: 0;
+  color: inherit;
+  background: transparent;
+}
+
+.rich-editor .tiptap hr,
+.preview hr {
+  margin: 18px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.rich-editor .tiptap a,
+.preview a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-editor .tiptap [data-align="center"],
+.preview [data-align="center"] {
+  text-align: center;
+}
+
+.rich-editor .tiptap [data-align="right"],
+.preview [data-align="right"] {
+  text-align: right;
+}
+
+.rich-editor .tiptap [data-align="justify"],
+.preview [data-align="justify"] {
+  text-align: justify;
 }
 
 .source-editor {
@@ -399,6 +647,15 @@ select:focus,
   background: var(--surface);
 }
 
+.editor-publish-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding: 14px 18px;
+  background: var(--surface);
+}
+
 .preview table,
 .history-table-wrap table {
   width: 100%;
@@ -412,9 +669,9 @@ select:focus,
 }
 
 .security-note {
-  margin: 16px 18px 0;
+  margin: 12px 14px 0;
   border-left: 4px solid var(--warning);
-  padding: 10px 12px;
+  padding: 8px 10px;
   color: var(--note-fg);
   background: var(--accent-soft);
   line-height: 1.5;
@@ -425,13 +682,71 @@ select:focus,
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0 18px 16px;
+  padding: 0 14px 14px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(28, 27, 26, 0.42);
+}
+
+.publish-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 24px 80px rgba(28, 27, 26, 0.24);
+}
+
+.publish-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+}
+
+.publish-dialog-header h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.dialog-close {
+  height: 32px;
+}
+
+.publish-note {
+  margin: 14px 16px 0;
+}
+
+.publish-dialog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.publish-dialog-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  padding: 14px 16px;
 }
 
 .policy,
 .status,
 .error {
-  margin: 0 18px 16px;
+  margin: 0 14px 14px;
   border-radius: 6px;
   padding: 10px 12px;
   font-size: 13px;
@@ -490,6 +805,19 @@ select:focus,
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+@media (max-width: 1180px) {
+  .metadata-panel .form-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .document-meta-grid {
+    grid-template-areas:
+      "type title title title title title"
+      "issuer issuer recipient recipient number number"
+      "date date watermark watermark . .";
+  }
+}
+
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -510,13 +838,43 @@ select:focus,
 
   .metadata-panel,
   .editor-panel,
-  .security-panel,
   .history-panel {
     grid-column: 1;
     grid-row: auto;
   }
 
-  .security-panel {
-    position: static;
+  .metadata-panel .form-grid,
+  .publish-dialog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .document-meta-grid {
+    grid-template-areas:
+      "type title"
+      "issuer recipient"
+      "number date"
+      "watermark .";
+  }
+
+  .admin-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .metadata-panel .form-grid,
+  .publish-dialog-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .document-meta-grid {
+    grid-template-areas:
+      "type"
+      "title"
+      "issuer"
+      "recipient"
+      "number"
+      "date"
+      "watermark";
   }
 }

@@ -14,6 +14,11 @@ const ALLOWED_TAGS = new Set([
   "EM",
   "I",
   "U",
+  "S",
+  "DEL",
+  "STRIKE",
+  "CODE",
+  "PRE",
   "UL",
   "OL",
   "LI",
@@ -35,17 +40,36 @@ const UNSUPPORTED_EDITOR_CHARACTERS = /[\p{Script=Han}\uF900-\uFAFF]/gu;
 
 const ALLOWED_ATTRS: Record<string, Set<string>> = {
   A: new Set(["href", "title"]),
+  H1: new Set(["data-align"]),
+  H2: new Set(["data-align"]),
+  H3: new Set(["data-align"]),
+  H4: new Set(["data-align"]),
   IMG: new Set(["src", "alt", "title"]),
+  P: new Set(["data-align"]),
   TH: new Set(["colspan", "rowspan"]),
   TD: new Set(["colspan", "rowspan"])
 };
 
-function isSafeUrl(value: string, imageOnly: boolean): boolean {
+const ALLOWED_ALIGNMENTS = new Set(["center", "right", "justify"]);
+const ALLOWED_LINK_PROTOCOLS = new Set(["https:", "mailto:", "tel:"]);
+
+export function isAllowedLinkHref(value: string): boolean {
   const trimmed = value.trim();
-  if (imageOnly) {
-    return /^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(trimmed) || /^blob:/i.test(trimmed);
+  if (!trimmed || /[\s<>"']/.test(trimmed)) {
+    return false;
   }
-  return /^(https:|mailto:|tel:)/i.test(trimmed);
+
+  try {
+    const url = new URL(trimmed);
+    return ALLOWED_LINK_PROTOCOLS.has(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedImageSrc(value: string): boolean {
+  const trimmed = value.trim();
+  return /^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(trimmed) || /^blob:/i.test(trimmed);
 }
 
 export function removeUnsupportedEditorCharacters(input: string): string {
@@ -84,10 +108,13 @@ function cleanNode(node: ParentNode): void {
         element.removeAttribute(attr.name);
         continue;
       }
-      if (attrName === "href" && !isSafeUrl(attr.value, false)) {
+      if (attrName === "href" && !isAllowedLinkHref(attr.value)) {
         element.removeAttribute(attr.name);
       }
-      if (attrName === "src" && !isSafeUrl(attr.value, true)) {
+      if (attrName === "src" && !isAllowedImageSrc(attr.value)) {
+        element.removeAttribute(attr.name);
+      }
+      if (attrName === "data-align" && !ALLOWED_ALIGNMENTS.has(attr.value)) {
         element.removeAttribute(attr.name);
       }
     }

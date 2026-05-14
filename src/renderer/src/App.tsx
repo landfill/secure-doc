@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { PublishHistoryRecord } from "../../shared/desktopApi";
@@ -12,11 +13,23 @@ import {
 } from "../../shared/pinPolicy";
 import { issueSecureDocument, type SecureDocPlainContent } from "../../shared/securePackage";
 import { buildSecureHtmlDocument } from "../../shared/viewerHtml";
-import { removeUnsupportedEditorCharacters, sanitizeHtml, stripHtml } from "./sanitizeHtml";
+import { isAllowedLinkHref, removeUnsupportedEditorCharacters, sanitizeHtml, stripHtml } from "./sanitizeHtml";
 
 type EditorMode = "visual" | "html";
+type HeadingLevel = 1 | 2 | 3;
+type BlockStyle = "paragraph" | `heading-${HeadingLevel}`;
+type TextAlign = "left" | "center" | "right" | "justify";
 const documentTypes = ["보험증서", "계약서", "고지서", "안내문", "기타"] as const;
 type DocumentType = (typeof documentTypes)[number];
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    secureDocTextAlign: {
+      setTextAlign: (alignment: TextAlign) => ReturnType;
+      unsetTextAlign: () => ReturnType;
+    };
+  }
+}
 
 type MetadataState = {
   title: string;
@@ -36,6 +49,106 @@ type DocumentPreset = {
   watermarkText: string;
   buildHtml: (metadata: MetadataState) => string;
 };
+
+const textAlignments: TextAlign[] = ["left", "center", "right", "justify"];
+
+function isTextAlign(value: unknown): value is TextAlign {
+  return typeof value === "string" && textAlignments.includes(value as TextAlign);
+}
+
+const SecureDocTextAlign = Extension.create({
+  name: "secureDocTextAlign",
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["heading", "paragraph"],
+        attributes: {
+          textAlign: {
+            default: null,
+            parseHTML: (element) => {
+              const value = element.getAttribute("data-align");
+              return isTextAlign(value) && value !== "left" ? value : null;
+            },
+            renderHTML: (attributes) => {
+              const value = attributes.textAlign;
+              return isTextAlign(value) && value !== "left" ? { "data-align": value } : {};
+            }
+          }
+        }
+      }
+    ];
+  },
+
+  addCommands() {
+    return {
+      setTextAlign:
+        (alignment: TextAlign) =>
+        ({ commands }) => {
+          if (!isTextAlign(alignment)) {
+            return false;
+          }
+          if (alignment === "left") {
+            return commands.unsetTextAlign();
+          }
+
+          const results = ["paragraph", "heading"].map((type) => commands.updateAttributes(type, { textAlign: alignment }));
+          return results.some(Boolean);
+        },
+      unsetTextAlign:
+        () =>
+        ({ commands }) => {
+          const results = ["paragraph", "heading"].map((type) => commands.resetAttributes(type, "textAlign"));
+          return results.some(Boolean);
+        }
+    };
+  }
+});
+
+type ToolbarButtonProps = {
+  label: string;
+  title: string;
+  active?: boolean;
+  className?: string;
+  disabled?: boolean;
+  format?: string;
+  onClick: () => void;
+};
+
+function ToolbarButton({
+  label,
+  title,
+  active = false,
+  className = "",
+  disabled = false,
+  format,
+  onClick
+}: ToolbarButtonProps): ReactElement {
+  return (
+    <button
+      type="button"
+      className={["toolbar-button", active ? "active" : "", className].filter(Boolean).join(" ")}
+      data-format={format}
+      title={title}
+      aria-label={title}
+      aria-pressed={active || undefined}
+      disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+    >
+      {format?.startsWith("align-") ? (
+        <span className="toolbar-align-icon" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+          <span />
+        </span>
+      ) : (
+        <span className="toolbar-icon">{label}</span>
+      )}
+    </button>
+  );
+}
 
 function escapeTemplateValue(value: string): string {
   return value
@@ -232,6 +345,17 @@ function compactPrivateMeta(metadata: MetadataState): SecureDocPlainContent["pri
   };
 }
 
+function normalizeLinkHref(value: string): string | null {
+  const trimmed = removeUnsupportedEditorCharacters(value).trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed);
+  const href = hasScheme ? trimmed : `https://${trimmed}`;
+  return isAllowedLinkHref(href) ? href : null;
+}
+
 export function App(): ReactElement {
   const [metadata, setMetadata] = useState<MetadataState>(defaultMetadata);
   const [editorHtml, setEditorHtml] = useState(initialEditorHtml);
@@ -245,6 +369,7 @@ export function App(): ReactElement {
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<PublishHistoryRecord[]>([]);
   const [syncPresetWithMetadata, setSyncPresetWithMetadata] = useState(true);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const programmaticEditorUpdateRef = useRef(false);
 
   const pinResult = useMemo(() => evaluatePinPolicy(pin), [pin]);
@@ -255,8 +380,21 @@ export function App(): ReactElement {
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3]
+        },
+        link: {
+          autolink: false,
+          linkOnPaste: false,
+          openOnClick: false,
+          defaultProtocol: "https",
+          HTMLAttributes: {
+            target: null,
+            rel: null,
+            class: null
+          },
+          isAllowedUri: (url) => isAllowedLinkHref(url)
         }
-      })
+      }),
+      SecureDocTextAlign
     ],
     content: initialEditorHtml,
     immediatelyRender: false,
@@ -275,6 +413,21 @@ export function App(): ReactElement {
   useEffect(() => {
     editor?.commands.setContent(editorHtml, { emitUpdate: false });
   }, [editor]);
+
+  useEffect(() => {
+    if (!publishDialogOpen) {
+      return undefined;
+    }
+
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape" && !busy) {
+        setPublishDialogOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [busy, publishDialogOpen]);
 
   function replaceEditorHtml(nextHtml: string): void {
     const sanitizedHtml = sanitizeHtml(nextHtml);
@@ -339,8 +492,80 @@ export function App(): ReactElement {
     action();
   }
 
+  function canRunEditorCommand(action: () => boolean): boolean {
+    return Boolean(editor && action());
+  }
+
   function isEditorActive(name: string, attributes?: Record<string, unknown>): boolean {
     return Boolean(editor?.isActive(name, attributes));
+  }
+
+  function currentBlockStyle(): BlockStyle {
+    if (isEditorActive("heading", { level: 1 })) {
+      return "heading-1";
+    }
+    if (isEditorActive("heading", { level: 2 })) {
+      return "heading-2";
+    }
+    if (isEditorActive("heading", { level: 3 })) {
+      return "heading-3";
+    }
+    return "paragraph";
+  }
+
+  function currentTextAlign(): TextAlign {
+    const paragraphAlign = editor?.getAttributes("paragraph").textAlign;
+    const headingAlign = editor?.getAttributes("heading").textAlign;
+    if (isTextAlign(paragraphAlign)) {
+      return paragraphAlign;
+    }
+    if (isTextAlign(headingAlign)) {
+      return headingAlign;
+    }
+    return "left";
+  }
+
+  function canSetTextAlign(): boolean {
+    return Boolean(editor && (editor.isActive("paragraph") || editor.isActive("heading")));
+  }
+
+  function setBlockStyle(value: BlockStyle): void {
+    if (value === "paragraph") {
+      runEditorCommand(() => editor?.chain().focus().setParagraph().run() ?? false);
+      return;
+    }
+
+    const level = Number(value.replace("heading-", "")) as HeadingLevel;
+    runEditorCommand(() => editor?.chain().focus().setHeading({ level }).run() ?? false);
+  }
+
+  function setTextAlign(alignment: TextAlign): void {
+    runEditorCommand(() => editor?.chain().focus().setTextAlign(alignment).run() ?? false);
+  }
+
+  function handleSetLink(): void {
+    if (!editor) {
+      return;
+    }
+
+    const currentHref = editor.getAttributes("link").href;
+    const nextHref = window.prompt("링크 URL", typeof currentHref === "string" ? currentHref : "");
+    if (nextHref === null) {
+      return;
+    }
+
+    const normalizedHref = normalizeLinkHref(nextHref);
+    if (normalizedHref === null) {
+      setError("링크는 https, mailto, tel 형식만 사용할 수 있습니다.");
+      return;
+    }
+    if (!normalizedHref) {
+      runEditorCommand(() => editor.chain().focus().extendMarkRange("link").unsetLink().run());
+      return;
+    }
+
+    setError("");
+    runEditorCommand(() => editor.chain().focus().extendMarkRange("link").setLink({ href: normalizedHref }).run());
   }
 
   function handleGeneratePin(): void {
@@ -349,6 +574,17 @@ export function App(): ReactElement {
     setPinConfirm(nextPin);
     setStatus("새 PIN이 생성되었습니다. 표시 버튼으로 확인하거나 복사할 수 있습니다.");
     setError("");
+  }
+
+  function openPublishDialog(): void {
+    setPublishDialogOpen(true);
+    setError("");
+  }
+
+  function closePublishDialog(): void {
+    if (!busy) {
+      setPublishDialogOpen(false);
+    }
   }
 
   async function handleCopyPin(): Promise<void> {
@@ -434,6 +670,7 @@ export function App(): ReactElement {
       }
 
       setStatus(`발행 완료: ${saveResult.filePath}`);
+      setPublishDialogOpen(false);
       setPin("");
       setPinConfirm("");
       const nextHistory = await window.secureDoc.getHistory();
@@ -477,16 +714,8 @@ export function App(): ReactElement {
           <div className="section-heading">
             <h2 id="metadata-heading">문서 기본정보</h2>
           </div>
-          <div className="form-grid">
-            <label>
-              문서 제목
-              <input value={metadata.title} onChange={(event) => updateMetadata("title", event.target.value)} />
-            </label>
-            <label>
-              갑/발행자
-              <input value={metadata.issuer} onChange={(event) => updateMetadata("issuer", event.target.value)} />
-            </label>
-            <label>
+          <div className="form-grid document-meta-grid">
+            <label className="field-type">
               문서 유형
               <select value={metadata.docType} onChange={(event) => handleDocumentTypeChange(event.target.value as DocumentType)}>
                 {documentTypes.map((docType) => (
@@ -496,44 +725,54 @@ export function App(): ReactElement {
                 ))}
               </select>
             </label>
-            <label>
-              표시용 만료일
+            <label className="field-title">
+              문서 제목
+              <input value={metadata.title} onChange={(event) => updateMetadata("title", event.target.value)} />
+            </label>
+            <label className="field-issuer">
+              발행자
+              <input value={metadata.issuer} onChange={(event) => updateMetadata("issuer", event.target.value)} />
+            </label>
+            <label className="field-recipient">
+              수신자
+              <input value={metadata.recipientName} onChange={(event) => updateMetadata("recipientName", event.target.value)} />
+            </label>
+            <label className="field-number">
+              문서번호
+              <input value={metadata.documentNumber} onChange={(event) => updateMetadata("documentNumber", event.target.value)} />
+            </label>
+            <label className="field-date">
+              만료일
               <input
                 type="date"
                 value={metadata.displayExpiresAt}
                 onChange={(event) => updateMetadata("displayExpiresAt", event.target.value)}
               />
             </label>
-            <label>
-              을/수신자명
-              <input value={metadata.recipientName} onChange={(event) => updateMetadata("recipientName", event.target.value)} />
-            </label>
-            <label>
-              문서번호
-              <input value={metadata.documentNumber} onChange={(event) => updateMetadata("documentNumber", event.target.value)} />
-            </label>
-            <label className="wide">
-              문서 설명
-              <input value={metadata.description} onChange={(event) => updateMetadata("description", event.target.value)} />
-            </label>
-            <label>
+            <label className="field-watermark">
               워터마크 문구
               <input value={metadata.watermarkText} onChange={(event) => updateMetadata("watermarkText", event.target.value)} />
             </label>
-            <label>
-              발행 작업자
-              <input value={metadata.createdBy} onChange={(event) => updateMetadata("createdBy", event.target.value)} />
-            </label>
           </div>
+          <details className="admin-meta-details">
+            <summary>관리용 정보</summary>
+            <div className="admin-meta-grid">
+              <label className="field-description">
+                관리 메모
+                <input value={metadata.description} onChange={(event) => updateMetadata("description", event.target.value)} />
+              </label>
+              <label className="field-created">
+                발행 작업자
+                <input value={metadata.createdBy} onChange={(event) => updateMetadata("createdBy", event.target.value)} />
+              </label>
+            </div>
+          </details>
         </section>
 
         <section className="panel editor-panel" aria-labelledby="editor-heading">
           <div className="section-heading">
             <h2 id="editor-heading">암호화 본문 작성</h2>
-          </div>
-          <div className="editor-toolbar-row">
-            <div className="editor-actions">
-              <div className="mode-toggle" aria-label="본문 작성 모드">
+            <div className="mode-toggle editor-mode-toggle" aria-label="본문 작성 모드">
                 <button
                   type="button"
                   className={editorMode === "visual" ? "active" : ""}
@@ -549,47 +788,171 @@ export function App(): ReactElement {
                   HTML 보기
                 </button>
               </div>
+          </div>
+          <div className="editor-toolbar-row">
+            <div className="editor-actions">
             <div className="toolbar" aria-label="본문 서식">
-              <button
-                type="button"
-                className={isEditorActive("heading", { level: 1 }) ? "active" : ""}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleHeading({ level: 1 }).run() ?? false)}
-              >
-                H1
-              </button>
-              <button
-                type="button"
-                className={isEditorActive("heading", { level: 2 }) ? "active" : ""}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleHeading({ level: 2 }).run() ?? false)}
-              >
-                H2
-              </button>
-              <button
-                type="button"
-                className={isEditorActive("bold") ? "active" : ""}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBold().run() ?? false)}
-              >
-                B
-              </button>
-              <button
-                type="button"
-                className={isEditorActive("italic") ? "active" : ""}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleItalic().run() ?? false)}
-              >
-                I
-              </button>
-              <button
-                type="button"
-                className={isEditorActive("bulletList") ? "active" : ""}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBulletList().run() ?? false)}
-              >
-                  List
-                </button>
+              <div className="toolbar-section">
+                <ToolbarButton
+                  label="↶"
+                  title="실행 취소"
+                  disabled={!canRunEditorCommand(() => editor!.can().undo())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().undo().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="↷"
+                  title="다시 실행"
+                  disabled={!canRunEditorCommand(() => editor!.can().redo())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().redo().run() ?? false)}
+                />
+              </div>
+              <div className="toolbar-section">
+                <select
+                  className="block-style-select"
+                  title="문단 스타일"
+                  aria-label="문단 스타일"
+                  value={currentBlockStyle()}
+                  disabled={!editor}
+                  onChange={(event) => setBlockStyle(event.target.value as BlockStyle)}
+                >
+                  <option value="paragraph">P</option>
+                  <option value="heading-1">H1</option>
+                  <option value="heading-2">H2</option>
+                  <option value="heading-3">H3</option>
+                </select>
+              </div>
+              <div className="toolbar-section">
+                <ToolbarButton
+                  label=""
+                  title="왼쪽 정렬"
+                  format="align-left"
+                  active={currentTextAlign() === "left"}
+                  disabled={!canSetTextAlign()}
+                  onClick={() => setTextAlign("left")}
+                />
+                <ToolbarButton
+                  label=""
+                  title="가운데 정렬"
+                  format="align-center"
+                  active={currentTextAlign() === "center"}
+                  disabled={!canSetTextAlign()}
+                  onClick={() => setTextAlign("center")}
+                />
+                <ToolbarButton
+                  label=""
+                  title="오른쪽 정렬"
+                  format="align-right"
+                  active={currentTextAlign() === "right"}
+                  disabled={!canSetTextAlign()}
+                  onClick={() => setTextAlign("right")}
+                />
+                <ToolbarButton
+                  label=""
+                  title="양쪽 정렬"
+                  format="align-justify"
+                  active={currentTextAlign() === "justify"}
+                  disabled={!canSetTextAlign()}
+                  onClick={() => setTextAlign("justify")}
+                />
+              </div>
+              <div className="toolbar-section">
+                <ToolbarButton
+                  label="B"
+                  title="굵게"
+                  active={isEditorActive("bold")}
+                  format="bold"
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleBold().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBold().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="I"
+                  title="기울임"
+                  active={isEditorActive("italic")}
+                  format="italic"
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleItalic().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleItalic().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="U"
+                  title="밑줄"
+                  active={isEditorActive("underline")}
+                  format="underline"
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleUnderline().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleUnderline().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="S"
+                  title="취소선"
+                  active={isEditorActive("strike")}
+                  format="strike"
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleStrike().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleStrike().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="&lt;/&gt;"
+                  title="인라인 코드"
+                  active={isEditorActive("code")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleCode().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleCode().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="Tx"
+                  title="서식 지우기"
+                  disabled={!editor}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().unsetAllMarks().clearNodes().run() ?? false)}
+                />
+              </div>
+              <div className="toolbar-section">
+                <ToolbarButton
+                  label="☷"
+                  title="글머리 목록"
+                  active={isEditorActive("bulletList")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleBulletList().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBulletList().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="1."
+                  title="번호 목록"
+                  active={isEditorActive("orderedList")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleOrderedList().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleOrderedList().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="❝"
+                  title="인용 블록"
+                  active={isEditorActive("blockquote")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleBlockquote().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBlockquote().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="{ }"
+                  title="코드 블록"
+                  active={isEditorActive("codeBlock")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleCodeBlock().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleCodeBlock().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="―"
+                  title="구분선"
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().setHorizontalRule().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().setHorizontalRule().run() ?? false)}
+                />
+              </div>
+              <div className="toolbar-section">
+                <ToolbarButton
+                  label="↗"
+                  title="링크 삽입 또는 수정"
+                  active={isEditorActive("link")}
+                  disabled={!editor}
+                  onClick={handleSetLink}
+                />
+                <ToolbarButton
+                  label="↛"
+                  title="링크 해제"
+                  disabled={!isEditorActive("link")}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().extendMarkRange("link").unsetLink().run() ?? false)}
+                />
+              </div>
               </div>
             </div>
           </div>
@@ -610,57 +973,11 @@ export function App(): ReactElement {
             <h3>미리보기</h3>
             <div className="preview" dangerouslySetInnerHTML={{ __html: sanitizedPreview }} />
           </div>
-        </section>
-
-        <section className="panel security-panel" aria-labelledby="security-heading">
-          <div className="section-heading">
-            <h2 id="security-heading">PIN 설정 및 발행</h2>
-          </div>
-          <p className="security-note">
-            6자리 이상 15자리 이내 PIN은 문자와 기호를 함께 사용할 수 있는 편의형 암호입니다. 자동 생성 후 표시 버튼으로 확인하거나 복사할 수 있습니다.
-          </p>
-          <div className="form-grid">
-            <label>
-              문서 열람 PIN
-              <input
-                value={pin}
-                onChange={(event) => setPin(normalizePinInput(event.target.value))}
-                type={showPin ? "text" : "password"}
-                autoComplete="one-time-code"
-              />
-            </label>
-            <label>
-              PIN 확인
-              <input
-                value={pinConfirm}
-                onChange={(event) => setPinConfirm(normalizePinInput(event.target.value))}
-                type={showPin ? "text" : "password"}
-                autoComplete="one-time-code"
-              />
-            </label>
-            <label>
-              PBKDF2 반복 횟수
-              <select value={iterations} onChange={(event) => setIterations(Number(event.target.value))}>
-                <option value={DEFAULT_PIN_KDF_ITERATIONS}>1,000,000 기본</option>
-                <option value={COMPAT_PIN_KDF_ITERATIONS}>600,000 저사양 호환</option>
-              </select>
-            </label>
-          </div>
-          <div className="button-row">
-            <button type="button" onClick={handleGeneratePin}>
-              자동 생성
-            </button>
-            <button type="button" onClick={handleCopyPin} disabled={!pinResult.valid}>
-              복사
-            </button>
-            <button type="button" onClick={() => setShowPin((value) => !value)}>
-              {showPin ? "숨김" : "표시"}
-            </button>
-            <button type="button" className="primary" onClick={handlePublish} disabled={busy}>
-              {busy ? "발행 중" : "HTML 파일 생성"}
+          <div className="editor-publish-row">
+            <button type="button" className="primary" onClick={openPublishDialog}>
+              HTML 파일 생성
             </button>
           </div>
-          <div className={pinResult.valid ? "policy ok" : "policy"}>{pin ? pinResult.message : "PIN 정책 검사 대기 중"}</div>
           {status && <div className="status">{status}</div>}
           {error && <div className="error">{error}</div>}
         </section>
@@ -709,6 +1026,76 @@ export function App(): ReactElement {
         </section>
         </div>
       </main>
+      {publishDialogOpen && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closePublishDialog();
+            }
+          }}
+        >
+          <section className="publish-dialog" role="dialog" aria-modal="true" aria-labelledby="publish-dialog-heading">
+            <div className="publish-dialog-header">
+              <h2 id="publish-dialog-heading">PIN 설정 및 발행</h2>
+              <button type="button" className="dialog-close" onClick={closePublishDialog} disabled={busy}>
+                닫기
+              </button>
+            </div>
+            <p className="security-note publish-note">
+              6자리 이상 15자리 이내 PIN은 문자와 기호를 함께 사용할 수 있는 편의형 암호입니다. 자동 생성 후 표시 버튼으로 확인하거나 복사할 수 있습니다.
+            </p>
+            <div className="publish-dialog-grid">
+              <label className="field-pin">
+                문서 열람 PIN
+                <input
+                  value={pin}
+                  onChange={(event) => setPin(normalizePinInput(event.target.value))}
+                  type={showPin ? "text" : "password"}
+                  autoComplete="one-time-code"
+                />
+              </label>
+              <label className="field-pin">
+                PIN 확인
+                <input
+                  value={pinConfirm}
+                  onChange={(event) => setPinConfirm(normalizePinInput(event.target.value))}
+                  type={showPin ? "text" : "password"}
+                  autoComplete="one-time-code"
+                />
+              </label>
+              <label className="field-iterations">
+                PBKDF2 반복 횟수
+                <select value={iterations} onChange={(event) => setIterations(Number(event.target.value))}>
+                  <option value={DEFAULT_PIN_KDF_ITERATIONS}>1,000,000 기본</option>
+                  <option value={COMPAT_PIN_KDF_ITERATIONS}>600,000 저사양 호환</option>
+                </select>
+              </label>
+            </div>
+            <div className="button-row publish-dialog-actions">
+              <button type="button" onClick={handleGeneratePin}>
+                자동 생성
+              </button>
+              <button type="button" onClick={handleCopyPin} disabled={!pinResult.valid}>
+                복사
+              </button>
+              <button type="button" onClick={() => setShowPin((value) => !value)}>
+                {showPin ? "숨김" : "표시"}
+              </button>
+              <button type="button" onClick={closePublishDialog} disabled={busy}>
+                취소
+              </button>
+              <button type="button" className="primary" onClick={handlePublish} disabled={busy}>
+                {busy ? "발행 중" : "HTML 파일 생성"}
+              </button>
+            </div>
+            <div className={pinResult.valid ? "policy ok" : "policy"}>{pin ? pinResult.message : "PIN 정책 검사 대기 중"}</div>
+            {status && <div className="status">{status}</div>}
+            {error && <div className="error">{error}</div>}
+          </section>
+        </div>
+      )}
     </div>
   );
 }

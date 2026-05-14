@@ -50,14 +50,26 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     :root {
       color-scheme: light;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f5f7fb;
-      color: #18202f;
+      --bg: #fafaf9;
+      --fg: #1c1b1a;
+      --muted: #6b6964;
+      --border: #e6e4e0;
+      --border-control: #d4d0ca;
+      --border-hover: #cbbcb3;
+      --border-table: #d7deea;
+      --accent: #c96442;
+      --accent-soft: #fbefe9;
+      --surface: #ffffff;
+      --on-accent: #ffffff;
+      --bad: #b53a2a;
+      background: var(--bg);
+      color: var(--fg);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      background: #f5f7fb;
+      background: var(--bg);
     }
     .shell {
       min-height: 100vh;
@@ -66,8 +78,8 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     }
     header {
       padding: 28px min(7vw, 72px) 18px;
-      border-bottom: 1px solid #d9e0eb;
-      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
     }
     h1 {
       margin: 0 0 8px;
@@ -79,7 +91,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       display: flex;
       flex-wrap: wrap;
       gap: 10px 18px;
-      color: #5d6878;
+      color: var(--muted);
       font-size: 14px;
     }
     main {
@@ -99,7 +111,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     }
     .unlock p, .status {
       margin: 0;
-      color: #5d6878;
+      color: var(--muted);
       line-height: 1.5;
     }
     label {
@@ -110,12 +122,12 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     input {
       width: 100%;
       height: 48px;
-      border: 1px solid #aeb9c9;
+      border: 1px solid var(--border-control);
       border-radius: 6px;
       padding: 0 14px;
       font: inherit;
       letter-spacing: 0;
-      background: #fff;
+      background: var(--surface);
     }
     button {
       width: fit-content;
@@ -126,8 +138,8 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       padding: 0 18px;
       font: inherit;
       font-weight: 700;
-      color: #fff;
-      background: #155eef;
+      color: var(--on-accent);
+      background: var(--accent);
       cursor: pointer;
     }
     button:disabled {
@@ -136,7 +148,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     }
     .error {
       min-height: 22px;
-      color: #b42318;
+      color: var(--bad);
       font-weight: 700;
     }
     .document {
@@ -144,8 +156,8 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       position: relative;
       padding: 32px 0;
       line-height: 1.7;
-      background: #fff;
-      border-top: 4px solid #155eef;
+      background: var(--surface);
+      border-top: 4px solid var(--accent);
       overflow: hidden;
       isolation: isolate;
     }
@@ -160,13 +172,60 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       border-collapse: collapse;
     }
     .document-inner th, .document-inner td {
-      border: 1px solid #d9e0eb;
+      border: 1px solid var(--border-table);
       padding: 8px 10px;
       text-align: left;
     }
     .document-inner img {
       max-width: 100%;
       height: auto;
+    }
+    .document-inner ul, .document-inner ol {
+      padding-left: 24px;
+    }
+    .document-inner blockquote {
+      margin: 0 0 14px;
+      border-left: 4px solid var(--border-hover);
+      padding: 4px 0 4px 12px;
+      color: var(--muted);
+    }
+    .document-inner pre {
+      overflow-x: auto;
+      border-radius: 6px;
+      padding: 12px;
+      color: #f8fafc;
+      background: #1f2937;
+    }
+    .document-inner code {
+      border-radius: 4px;
+      padding: 2px 4px;
+      background: var(--accent-soft);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    .document-inner pre code {
+      padding: 0;
+      color: inherit;
+      background: transparent;
+    }
+    .document-inner hr {
+      margin: 20px 0;
+      border: 0;
+      border-top: 1px solid var(--border);
+    }
+    .document-inner a {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .document-inner [data-align="center"] {
+      text-align: center;
+    }
+    .document-inner [data-align="right"] {
+      text-align: right;
+    }
+    .document-inner [data-align="justify"] {
+      text-align: justify;
     }
     .watermark {
       display: none;
@@ -176,7 +235,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       align-items: center;
       justify-content: center;
       pointer-events: none;
-      color: rgba(24, 32, 47, 0.08);
+      color: rgba(28, 27, 26, 0.08);
       font-size: clamp(44px, 12vw, 132px);
       font-weight: 800;
       letter-spacing: 0;
@@ -357,14 +416,20 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
   function sanitizeHtml(input) {
     const template = document.createElement("template");
     template.innerHTML = String(input || "");
-    const allowedTags = new Set(["ARTICLE", "SECTION", "HEADER", "FOOTER", "H1", "H2", "H3", "H4", "P", "BR", "STRONG", "B", "EM", "I", "U", "UL", "OL", "LI", "TABLE", "THEAD", "TBODY", "TR", "TH", "TD", "A", "IMG", "BLOCKQUOTE", "HR", "SPAN"]);
+    const allowedTags = new Set(["ARTICLE", "SECTION", "HEADER", "FOOTER", "H1", "H2", "H3", "H4", "P", "BR", "STRONG", "B", "EM", "I", "U", "S", "DEL", "STRIKE", "CODE", "PRE", "UL", "OL", "LI", "TABLE", "THEAD", "TBODY", "TR", "TH", "TD", "A", "IMG", "BLOCKQUOTE", "HR", "SPAN"]);
     const removedTags = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "FORM", "INPUT", "BUTTON"]);
     const allowedAttrs = {
       A: new Set(["href", "title"]),
+      H1: new Set(["data-align"]),
+      H2: new Set(["data-align"]),
+      H3: new Set(["data-align"]),
+      H4: new Set(["data-align"]),
       IMG: new Set(["src", "alt", "title"]),
+      P: new Set(["data-align"]),
       TH: new Set(["colspan", "rowspan"]),
       TD: new Set(["colspan", "rowspan"])
     };
+    const allowedAlignments = new Set(["center", "right", "justify"]);
 
     function isSafeUrl(value, imageOnly) {
       const trimmed = String(value || "").trim();
@@ -405,6 +470,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
           }
           if (attrName === "href" && !isSafeUrl(attr.value, false)) element.removeAttribute(attr.name);
           if (attrName === "src" && !isSafeUrl(attr.value, true)) element.removeAttribute(attr.name);
+          if (attrName === "data-align" && !allowedAlignments.has(attr.value)) element.removeAttribute(attr.name);
         }
         clean(element);
       }
