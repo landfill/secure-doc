@@ -714,15 +714,7 @@ export function App(): ReactElement {
           <div className="section-heading">
             <h2 id="metadata-heading">문서 기본정보</h2>
           </div>
-          <div className="form-grid">
-            <label className="field-title">
-              문서 제목
-              <input value={metadata.title} onChange={(event) => updateMetadata("title", event.target.value)} />
-            </label>
-            <label className="field-issuer">
-              갑/발행자
-              <input value={metadata.issuer} onChange={(event) => updateMetadata("issuer", event.target.value)} />
-            </label>
+          <div className="form-grid document-meta-grid">
             <label className="field-type">
               문서 유형
               <select value={metadata.docType} onChange={(event) => handleDocumentTypeChange(event.target.value as DocumentType)}>
@@ -733,35 +725,48 @@ export function App(): ReactElement {
                 ))}
               </select>
             </label>
-            <label className="field-date">
-              표시용 만료일
-              <input
-                type="date"
-                value={metadata.displayExpiresAt}
-                onChange={(event) => updateMetadata("displayExpiresAt", event.target.value)}
-              />
+            <label className="field-title">
+              문서 제목
+              <input value={metadata.title} onChange={(event) => updateMetadata("title", event.target.value)} />
+            </label>
+            <label className="field-issuer">
+              발행자
+              <input value={metadata.issuer} onChange={(event) => updateMetadata("issuer", event.target.value)} />
             </label>
             <label className="field-recipient">
-              을/수신자명
+              수신자
               <input value={metadata.recipientName} onChange={(event) => updateMetadata("recipientName", event.target.value)} />
             </label>
             <label className="field-number">
               문서번호
               <input value={metadata.documentNumber} onChange={(event) => updateMetadata("documentNumber", event.target.value)} />
             </label>
-            <label className="field-description">
-              문서 설명
-              <input value={metadata.description} onChange={(event) => updateMetadata("description", event.target.value)} />
+            <label className="field-date">
+              만료일
+              <input
+                type="date"
+                value={metadata.displayExpiresAt}
+                onChange={(event) => updateMetadata("displayExpiresAt", event.target.value)}
+              />
             </label>
             <label className="field-watermark">
               워터마크 문구
               <input value={metadata.watermarkText} onChange={(event) => updateMetadata("watermarkText", event.target.value)} />
             </label>
-            <label className="field-created">
-              발행 작업자
-              <input value={metadata.createdBy} onChange={(event) => updateMetadata("createdBy", event.target.value)} />
-            </label>
           </div>
+          <details className="admin-meta-details">
+            <summary>관리용 정보</summary>
+            <div className="admin-meta-grid">
+              <label className="field-description">
+                관리 메모
+                <input value={metadata.description} onChange={(event) => updateMetadata("description", event.target.value)} />
+              </label>
+              <label className="field-created">
+                발행 작업자
+                <input value={metadata.createdBy} onChange={(event) => updateMetadata("createdBy", event.target.value)} />
+              </label>
+            </div>
+          </details>
         </section>
 
         <section className="panel editor-panel" aria-labelledby="editor-heading">

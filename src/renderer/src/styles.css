@@ -218,7 +218,14 @@ button.primary {
 }
 
 .metadata-panel .form-grid {
-  grid-template-columns: minmax(180px, 2fr) repeat(5, minmax(100px, 1fr));
+  grid-template-columns: minmax(128px, 0.7fr) minmax(220px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr);
+}
+
+.document-meta-grid {
+  grid-template-areas:
+    "type title title title"
+    "issuer issuer recipient recipient"
+    "number date watermark watermark";
 }
 
 .metadata-panel label {
@@ -243,11 +250,52 @@ label.wide {
 }
 
 .field-title {
-  grid-column: span 2;
+  grid-area: title;
 }
 
-.field-description {
-  grid-column: span 3;
+.field-type {
+  grid-area: type;
+}
+
+.field-issuer {
+  grid-area: issuer;
+}
+
+.field-recipient {
+  grid-area: recipient;
+}
+
+.field-number {
+  grid-area: number;
+}
+
+.field-date {
+  grid-area: date;
+}
+
+.field-watermark {
+  grid-area: watermark;
+}
+
+.admin-meta-details {
+  border-top: 1px solid var(--border);
+  padding: 0 14px 14px;
+}
+
+.admin-meta-details summary {
+  width: fit-content;
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr);
+  gap: 10px;
+  margin-top: 10px;
 }
 
 input,
@@ -763,12 +811,11 @@ select:focus,
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .field-title {
-    grid-column: span 2;
-  }
-
-  .field-description {
-    grid-column: span 2;
+  .document-meta-grid {
+    grid-template-areas:
+      "type title title title"
+      "issuer issuer recipient recipient"
+      "number date watermark watermark";
   }
 }
 
@@ -802,9 +849,16 @@ select:focus,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .field-title,
-  .field-description {
-    grid-column: 1 / -1;
+  .document-meta-grid {
+    grid-template-areas:
+      "type title"
+      "issuer recipient"
+      "number date"
+      "watermark watermark";
+  }
+
+  .admin-meta-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -812,5 +866,16 @@ select:focus,
   .metadata-panel .form-grid,
   .publish-dialog-grid {
     grid-template-columns: 1fr;
+  }
+
+  .document-meta-grid {
+    grid-template-areas:
+      "type"
+      "title"
+      "issuer"
+      "recipient"
+      "number"
+      "date"
+      "watermark";
   }
 }
