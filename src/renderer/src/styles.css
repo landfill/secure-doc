@@ -172,7 +172,7 @@ button.primary {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 410px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -186,14 +186,6 @@ button.primary {
 .editor-panel,
 .history-panel {
   grid-column: 1;
-}
-
-.security-panel {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: start;
-  position: sticky;
-  top: 16px;
 }
 
 .section-heading {
@@ -213,15 +205,29 @@ button.primary {
   letter-spacing: 0;
 }
 
+.metadata-panel .section-heading {
+  min-height: 44px;
+  padding: 10px 14px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  padding: 18px;
+  gap: 10px;
+  padding: 14px;
 }
 
-.security-panel .form-grid {
-  grid-template-columns: 1fr;
+.metadata-panel .form-grid {
+  grid-template-columns: minmax(180px, 2fr) repeat(5, minmax(100px, 1fr));
+}
+
+.metadata-panel label {
+  gap: 5px;
+}
+
+.metadata-panel input,
+.metadata-panel select {
+  height: 34px;
 }
 
 label {
@@ -234,6 +240,14 @@ label {
 
 label.wide {
   grid-column: 1 / -1;
+}
+
+.field-title {
+  grid-column: span 2;
+}
+
+.field-description {
+  grid-column: span 3;
 }
 
 input,
@@ -555,6 +569,15 @@ select:focus,
   background: var(--surface);
 }
 
+.editor-publish-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding: 14px 18px;
+  background: var(--surface);
+}
+
 .preview table,
 .history-table-wrap table {
   width: 100%;
@@ -568,9 +591,9 @@ select:focus,
 }
 
 .security-note {
-  margin: 16px 18px 0;
+  margin: 12px 14px 0;
   border-left: 4px solid var(--warning);
-  padding: 10px 12px;
+  padding: 8px 10px;
   color: var(--note-fg);
   background: var(--accent-soft);
   line-height: 1.5;
@@ -581,13 +604,71 @@ select:focus,
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0 18px 16px;
+  padding: 0 14px 14px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(28, 27, 26, 0.42);
+}
+
+.publish-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 24px 80px rgba(28, 27, 26, 0.24);
+}
+
+.publish-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+}
+
+.publish-dialog-header h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.dialog-close {
+  height: 32px;
+}
+
+.publish-note {
+  margin: 14px 16px 0;
+}
+
+.publish-dialog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.publish-dialog-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  padding: 14px 16px;
 }
 
 .policy,
 .status,
 .error {
-  margin: 0 18px 16px;
+  margin: 0 14px 14px;
   border-radius: 6px;
   padding: 10px 12px;
   font-size: 13px;
@@ -647,20 +728,16 @@ select:focus,
 }
 
 @media (max-width: 1280px) {
-  .workspace {
-    grid-template-columns: 1fr;
+  .metadata-panel .form-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .metadata-panel,
-  .editor-panel,
-  .security-panel,
-  .history-panel {
-    grid-column: 1;
-    grid-row: auto;
+  .field-title {
+    grid-column: span 2;
   }
 
-  .security-panel {
-    position: static;
+  .field-description {
+    grid-column: span 2;
   }
 }
 
@@ -684,13 +761,25 @@ select:focus,
 
   .metadata-panel,
   .editor-panel,
-  .security-panel,
   .history-panel {
     grid-column: 1;
     grid-row: auto;
   }
 
-  .security-panel {
-    position: static;
+  .metadata-panel .form-grid,
+  .publish-dialog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .field-title,
+  .field-description {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .metadata-panel .form-grid,
+  .publish-dialog-grid {
+    grid-template-columns: 1fr;
   }
 }

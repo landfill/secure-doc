@@ -364,6 +364,7 @@ export function App(): ReactElement {
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<PublishHistoryRecord[]>([]);
   const [syncPresetWithMetadata, setSyncPresetWithMetadata] = useState(true);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const programmaticEditorUpdateRef = useRef(false);
 
   const pinResult = useMemo(() => evaluatePinPolicy(pin), [pin]);
@@ -407,6 +408,21 @@ export function App(): ReactElement {
   useEffect(() => {
     editor?.commands.setContent(editorHtml, { emitUpdate: false });
   }, [editor]);
+
+  useEffect(() => {
+    if (!publishDialogOpen) {
+      return undefined;
+    }
+
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape" && !busy) {
+        setPublishDialogOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [busy, publishDialogOpen]);
 
   function replaceEditorHtml(nextHtml: string): void {
     const sanitizedHtml = sanitizeHtml(nextHtml);
@@ -554,6 +570,17 @@ export function App(): ReactElement {
     setError("");
   }
 
+  function openPublishDialog(): void {
+    setPublishDialogOpen(true);
+    setError("");
+  }
+
+  function closePublishDialog(): void {
+    if (!busy) {
+      setPublishDialogOpen(false);
+    }
+  }
+
   async function handleCopyPin(): Promise<void> {
     if (!pinResult.valid) {
       setError(pinResult.message);
@@ -637,6 +664,7 @@ export function App(): ReactElement {
       }
 
       setStatus(`발행 완료: ${saveResult.filePath}`);
+      setPublishDialogOpen(false);
       setPin("");
       setPinConfirm("");
       const nextHistory = await window.secureDoc.getHistory();
@@ -681,15 +709,15 @@ export function App(): ReactElement {
             <h2 id="metadata-heading">문서 기본정보</h2>
           </div>
           <div className="form-grid">
-            <label>
+            <label className="field-title">
               문서 제목
               <input value={metadata.title} onChange={(event) => updateMetadata("title", event.target.value)} />
             </label>
-            <label>
+            <label className="field-issuer">
               갑/발행자
               <input value={metadata.issuer} onChange={(event) => updateMetadata("issuer", event.target.value)} />
             </label>
-            <label>
+            <label className="field-type">
               문서 유형
               <select value={metadata.docType} onChange={(event) => handleDocumentTypeChange(event.target.value as DocumentType)}>
                 {documentTypes.map((docType) => (
@@ -699,7 +727,7 @@ export function App(): ReactElement {
                 ))}
               </select>
             </label>
-            <label>
+            <label className="field-date">
               표시용 만료일
               <input
                 type="date"
@@ -707,23 +735,23 @@ export function App(): ReactElement {
                 onChange={(event) => updateMetadata("displayExpiresAt", event.target.value)}
               />
             </label>
-            <label>
+            <label className="field-recipient">
               을/수신자명
               <input value={metadata.recipientName} onChange={(event) => updateMetadata("recipientName", event.target.value)} />
             </label>
-            <label>
+            <label className="field-number">
               문서번호
               <input value={metadata.documentNumber} onChange={(event) => updateMetadata("documentNumber", event.target.value)} />
             </label>
-            <label className="wide">
+            <label className="field-description">
               문서 설명
               <input value={metadata.description} onChange={(event) => updateMetadata("description", event.target.value)} />
             </label>
-            <label>
+            <label className="field-watermark">
               워터마크 문구
               <input value={metadata.watermarkText} onChange={(event) => updateMetadata("watermarkText", event.target.value)} />
             </label>
-            <label>
+            <label className="field-created">
               발행 작업자
               <input value={metadata.createdBy} onChange={(event) => updateMetadata("createdBy", event.target.value)} />
             </label>
@@ -930,57 +958,11 @@ export function App(): ReactElement {
             <h3>미리보기</h3>
             <div className="preview" dangerouslySetInnerHTML={{ __html: sanitizedPreview }} />
           </div>
-        </section>
-
-        <section className="panel security-panel" aria-labelledby="security-heading">
-          <div className="section-heading">
-            <h2 id="security-heading">PIN 설정 및 발행</h2>
-          </div>
-          <p className="security-note">
-            6자리 이상 15자리 이내 PIN은 문자와 기호를 함께 사용할 수 있는 편의형 암호입니다. 자동 생성 후 표시 버튼으로 확인하거나 복사할 수 있습니다.
-          </p>
-          <div className="form-grid">
-            <label>
-              문서 열람 PIN
-              <input
-                value={pin}
-                onChange={(event) => setPin(normalizePinInput(event.target.value))}
-                type={showPin ? "text" : "password"}
-                autoComplete="one-time-code"
-              />
-            </label>
-            <label>
-              PIN 확인
-              <input
-                value={pinConfirm}
-                onChange={(event) => setPinConfirm(normalizePinInput(event.target.value))}
-                type={showPin ? "text" : "password"}
-                autoComplete="one-time-code"
-              />
-            </label>
-            <label>
-              PBKDF2 반복 횟수
-              <select value={iterations} onChange={(event) => setIterations(Number(event.target.value))}>
-                <option value={DEFAULT_PIN_KDF_ITERATIONS}>1,000,000 기본</option>
-                <option value={COMPAT_PIN_KDF_ITERATIONS}>600,000 저사양 호환</option>
-              </select>
-            </label>
-          </div>
-          <div className="button-row">
-            <button type="button" onClick={handleGeneratePin}>
-              자동 생성
-            </button>
-            <button type="button" onClick={handleCopyPin} disabled={!pinResult.valid}>
-              복사
-            </button>
-            <button type="button" onClick={() => setShowPin((value) => !value)}>
-              {showPin ? "숨김" : "표시"}
-            </button>
-            <button type="button" className="primary" onClick={handlePublish} disabled={busy}>
-              {busy ? "발행 중" : "HTML 파일 생성"}
+          <div className="editor-publish-row">
+            <button type="button" className="primary" onClick={openPublishDialog}>
+              HTML 파일 생성
             </button>
           </div>
-          <div className={pinResult.valid ? "policy ok" : "policy"}>{pin ? pinResult.message : "PIN 정책 검사 대기 중"}</div>
           {status && <div className="status">{status}</div>}
           {error && <div className="error">{error}</div>}
         </section>
@@ -1029,6 +1011,76 @@ export function App(): ReactElement {
         </section>
         </div>
       </main>
+      {publishDialogOpen && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closePublishDialog();
+            }
+          }}
+        >
+          <section className="publish-dialog" role="dialog" aria-modal="true" aria-labelledby="publish-dialog-heading">
+            <div className="publish-dialog-header">
+              <h2 id="publish-dialog-heading">PIN 설정 및 발행</h2>
+              <button type="button" className="dialog-close" onClick={closePublishDialog} disabled={busy}>
+                닫기
+              </button>
+            </div>
+            <p className="security-note publish-note">
+              6자리 이상 15자리 이내 PIN은 문자와 기호를 함께 사용할 수 있는 편의형 암호입니다. 자동 생성 후 표시 버튼으로 확인하거나 복사할 수 있습니다.
+            </p>
+            <div className="publish-dialog-grid">
+              <label className="field-pin">
+                문서 열람 PIN
+                <input
+                  value={pin}
+                  onChange={(event) => setPin(normalizePinInput(event.target.value))}
+                  type={showPin ? "text" : "password"}
+                  autoComplete="one-time-code"
+                />
+              </label>
+              <label className="field-pin">
+                PIN 확인
+                <input
+                  value={pinConfirm}
+                  onChange={(event) => setPinConfirm(normalizePinInput(event.target.value))}
+                  type={showPin ? "text" : "password"}
+                  autoComplete="one-time-code"
+                />
+              </label>
+              <label className="field-iterations">
+                PBKDF2 반복 횟수
+                <select value={iterations} onChange={(event) => setIterations(Number(event.target.value))}>
+                  <option value={DEFAULT_PIN_KDF_ITERATIONS}>1,000,000 기본</option>
+                  <option value={COMPAT_PIN_KDF_ITERATIONS}>600,000 저사양 호환</option>
+                </select>
+              </label>
+            </div>
+            <div className="button-row publish-dialog-actions">
+              <button type="button" onClick={handleGeneratePin}>
+                자동 생성
+              </button>
+              <button type="button" onClick={handleCopyPin} disabled={!pinResult.valid}>
+                복사
+              </button>
+              <button type="button" onClick={() => setShowPin((value) => !value)}>
+                {showPin ? "숨김" : "표시"}
+              </button>
+              <button type="button" onClick={closePublishDialog} disabled={busy}>
+                취소
+              </button>
+              <button type="button" className="primary" onClick={handlePublish} disabled={busy}>
+                {busy ? "발행 중" : "HTML 파일 생성"}
+              </button>
+            </div>
+            <div className={pinResult.valid ? "policy ok" : "policy"}>{pin ? pinResult.message : "PIN 정책 검사 대기 중"}</div>
+            {status && <div className="status">{status}</div>}
+            {error && <div className="error">{error}</div>}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
