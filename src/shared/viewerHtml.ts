@@ -168,6 +168,44 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       max-width: 100%;
       height: auto;
     }
+    .document-inner ul, .document-inner ol {
+      padding-left: 24px;
+    }
+    .document-inner blockquote {
+      margin: 0 0 14px;
+      border-left: 4px solid #aeb9c9;
+      padding: 4px 0 4px 12px;
+      color: #5d6878;
+    }
+    .document-inner pre {
+      overflow-x: auto;
+      border-radius: 6px;
+      padding: 12px;
+      color: #f8fafc;
+      background: #1f2937;
+    }
+    .document-inner code {
+      border-radius: 4px;
+      padding: 2px 4px;
+      background: #edf2f7;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    .document-inner pre code {
+      padding: 0;
+      color: inherit;
+      background: transparent;
+    }
+    .document-inner hr {
+      margin: 20px 0;
+      border: 0;
+      border-top: 1px solid #d9e0eb;
+    }
+    .document-inner a {
+      color: #155eef;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
     .watermark {
       display: none;
       position: fixed;
@@ -357,7 +395,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
   function sanitizeHtml(input) {
     const template = document.createElement("template");
     template.innerHTML = String(input || "");
-    const allowedTags = new Set(["ARTICLE", "SECTION", "HEADER", "FOOTER", "H1", "H2", "H3", "H4", "P", "BR", "STRONG", "B", "EM", "I", "U", "UL", "OL", "LI", "TABLE", "THEAD", "TBODY", "TR", "TH", "TD", "A", "IMG", "BLOCKQUOTE", "HR", "SPAN"]);
+    const allowedTags = new Set(["ARTICLE", "SECTION", "HEADER", "FOOTER", "H1", "H2", "H3", "H4", "P", "BR", "STRONG", "B", "EM", "I", "U", "S", "DEL", "STRIKE", "CODE", "PRE", "UL", "OL", "LI", "TABLE", "THEAD", "TBODY", "TR", "TH", "TD", "A", "IMG", "BLOCKQUOTE", "HR", "SPAN"]);
     const removedTags = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "FORM", "INPUT", "BUTTON"]);
     const allowedAttrs = {
       A: new Set(["href", "title"]),

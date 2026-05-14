@@ -15,6 +15,8 @@ import { buildSecureHtmlDocument } from "../../shared/viewerHtml";
 import { removeUnsupportedEditorCharacters, sanitizeHtml, stripHtml } from "./sanitizeHtml";
 
 type EditorMode = "visual" | "html";
+type HeadingLevel = 1 | 2 | 3;
+type BlockStyle = "paragraph" | `heading-${HeadingLevel}`;
 const documentTypes = ["보험증서", "계약서", "고지서", "안내문", "기타"] as const;
 type DocumentType = (typeof documentTypes)[number];
 
@@ -36,6 +38,31 @@ type DocumentPreset = {
   watermarkText: string;
   buildHtml: (metadata: MetadataState) => string;
 };
+
+type ToolbarButtonProps = {
+  label: string;
+  title: string;
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+};
+
+function ToolbarButton({ label, title, active = false, disabled = false, onClick }: ToolbarButtonProps): ReactElement {
+  return (
+    <button
+      type="button"
+      className={active ? "active" : ""}
+      title={title}
+      aria-label={title}
+      aria-pressed={active || undefined}
+      disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+}
 
 function escapeTemplateValue(value: string): string {
   return value
@@ -232,6 +259,21 @@ function compactPrivateMeta(metadata: MetadataState): SecureDocPlainContent["pri
   };
 }
 
+function isAllowedLinkHref(value: string): boolean {
+  return /^(https:\/\/[^\s<>"]+|mailto:[^\s<>"]+|tel:[^\s<>"]+)$/i.test(value.trim());
+}
+
+function normalizeLinkHref(value: string): string | null {
+  const trimmed = removeUnsupportedEditorCharacters(value).trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed);
+  const href = hasScheme ? trimmed : `https://${trimmed}`;
+  return isAllowedLinkHref(href) ? href : null;
+}
+
 export function App(): ReactElement {
   const [metadata, setMetadata] = useState<MetadataState>(defaultMetadata);
   const [editorHtml, setEditorHtml] = useState(initialEditorHtml);
@@ -255,6 +297,18 @@ export function App(): ReactElement {
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3]
+        },
+        link: {
+          autolink: false,
+          linkOnPaste: false,
+          openOnClick: false,
+          defaultProtocol: "https",
+          HTMLAttributes: {
+            target: null,
+            rel: null,
+            class: null
+          },
+          isAllowedUri: (url) => isAllowedLinkHref(url)
         }
       })
     ],
@@ -334,13 +388,64 @@ export function App(): ReactElement {
   function runEditorCommand(action: () => boolean): void {
     if (editorMode !== "visual") {
       switchEditorMode("visual");
-      return;
     }
     action();
   }
 
+  function canRunEditorCommand(action: () => boolean): boolean {
+    return Boolean(editor && action());
+  }
+
   function isEditorActive(name: string, attributes?: Record<string, unknown>): boolean {
     return Boolean(editor?.isActive(name, attributes));
+  }
+
+  function currentBlockStyle(): BlockStyle {
+    if (isEditorActive("heading", { level: 1 })) {
+      return "heading-1";
+    }
+    if (isEditorActive("heading", { level: 2 })) {
+      return "heading-2";
+    }
+    if (isEditorActive("heading", { level: 3 })) {
+      return "heading-3";
+    }
+    return "paragraph";
+  }
+
+  function setBlockStyle(value: BlockStyle): void {
+    if (value === "paragraph") {
+      runEditorCommand(() => editor?.chain().focus().setParagraph().run() ?? false);
+      return;
+    }
+
+    const level = Number(value.replace("heading-", "")) as HeadingLevel;
+    runEditorCommand(() => editor?.chain().focus().setHeading({ level }).run() ?? false);
+  }
+
+  function handleSetLink(): void {
+    if (!editor) {
+      return;
+    }
+
+    const currentHref = editor.getAttributes("link").href;
+    const nextHref = window.prompt("링크 URL", typeof currentHref === "string" ? currentHref : "");
+    if (nextHref === null) {
+      return;
+    }
+
+    const normalizedHref = normalizeLinkHref(nextHref);
+    if (normalizedHref === null) {
+      setError("링크는 https, mailto, tel 형식만 사용할 수 있습니다.");
+      return;
+    }
+    if (!normalizedHref) {
+      runEditorCommand(() => editor.chain().focus().extendMarkRange("link").unsetLink().run());
+      return;
+    }
+
+    setError("");
+    runEditorCommand(() => editor.chain().focus().extendMarkRange("link").setLink({ href: normalizedHref }).run());
   }
 
   function handleGeneratePin(): void {
@@ -550,46 +655,129 @@ export function App(): ReactElement {
                 </button>
               </div>
             <div className="toolbar" aria-label="본문 서식">
-              <button
-                type="button"
-                className={isEditorActive("heading", { level: 1 }) ? "active" : ""}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleHeading({ level: 1 }).run() ?? false)}
-              >
-                H1
-              </button>
-              <button
-                type="button"
-                className={isEditorActive("heading", { level: 2 }) ? "active" : ""}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleHeading({ level: 2 }).run() ?? false)}
-              >
-                H2
-              </button>
-              <button
-                type="button"
-                className={isEditorActive("bold") ? "active" : ""}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBold().run() ?? false)}
-              >
-                B
-              </button>
-              <button
-                type="button"
-                className={isEditorActive("italic") ? "active" : ""}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleItalic().run() ?? false)}
-              >
-                I
-              </button>
-              <button
-                type="button"
-                className={isEditorActive("bulletList") ? "active" : ""}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBulletList().run() ?? false)}
-              >
-                  List
-                </button>
+              <div className="toolbar-section">
+                <ToolbarButton
+                  label="Undo"
+                  title="실행 취소"
+                  disabled={!canRunEditorCommand(() => editor!.can().undo())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().undo().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="Redo"
+                  title="다시 실행"
+                  disabled={!canRunEditorCommand(() => editor!.can().redo())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().redo().run() ?? false)}
+                />
+              </div>
+              <div className="toolbar-section">
+                <select
+                  className="block-style-select"
+                  title="문단 스타일"
+                  aria-label="문단 스타일"
+                  value={currentBlockStyle()}
+                  disabled={!editor}
+                  onChange={(event) => setBlockStyle(event.target.value as BlockStyle)}
+                >
+                  <option value="paragraph">문단</option>
+                  <option value="heading-1">제목 1</option>
+                  <option value="heading-2">제목 2</option>
+                  <option value="heading-3">제목 3</option>
+                </select>
+              </div>
+              <div className="toolbar-section">
+                <ToolbarButton
+                  label="B"
+                  title="굵게"
+                  active={isEditorActive("bold")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleBold().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBold().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="I"
+                  title="기울임"
+                  active={isEditorActive("italic")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleItalic().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleItalic().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="U"
+                  title="밑줄"
+                  active={isEditorActive("underline")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleUnderline().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleUnderline().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="S"
+                  title="취소선"
+                  active={isEditorActive("strike")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleStrike().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleStrike().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="Code"
+                  title="인라인 코드"
+                  active={isEditorActive("code")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleCode().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleCode().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="Clear"
+                  title="서식 지우기"
+                  disabled={!editor}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().unsetAllMarks().clearNodes().run() ?? false)}
+                />
+              </div>
+              <div className="toolbar-section">
+                <ToolbarButton
+                  label="UL"
+                  title="글머리 목록"
+                  active={isEditorActive("bulletList")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleBulletList().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBulletList().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="OL"
+                  title="번호 목록"
+                  active={isEditorActive("orderedList")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleOrderedList().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleOrderedList().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="Quote"
+                  title="인용 블록"
+                  active={isEditorActive("blockquote")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleBlockquote().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBlockquote().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="Pre"
+                  title="코드 블록"
+                  active={isEditorActive("codeBlock")}
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleCodeBlock().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().toggleCodeBlock().run() ?? false)}
+                />
+                <ToolbarButton
+                  label="HR"
+                  title="구분선"
+                  disabled={!canRunEditorCommand(() => editor!.can().chain().focus().setHorizontalRule().run())}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().setHorizontalRule().run() ?? false)}
+                />
+              </div>
+              <div className="toolbar-section">
+                <ToolbarButton
+                  label="Link"
+                  title="링크 삽입 또는 수정"
+                  active={isEditorActive("link")}
+                  disabled={!editor}
+                  onClick={handleSetLink}
+                />
+                <ToolbarButton
+                  label="Unlink"
+                  title="링크 해제"
+                  disabled={!isEditorActive("link")}
+                  onClick={() => runEditorCommand(() => editor?.chain().focus().extendMarkRange("link").unsetLink().run() ?? false)}
+                />
+              </div>
               </div>
             </div>
           </div>
