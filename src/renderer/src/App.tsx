@@ -43,15 +43,26 @@ type ToolbarButtonProps = {
   label: string;
   title: string;
   active?: boolean;
+  className?: string;
   disabled?: boolean;
+  format?: string;
   onClick: () => void;
 };
 
-function ToolbarButton({ label, title, active = false, disabled = false, onClick }: ToolbarButtonProps): ReactElement {
+function ToolbarButton({
+  label,
+  title,
+  active = false,
+  className = "",
+  disabled = false,
+  format,
+  onClick
+}: ToolbarButtonProps): ReactElement {
   return (
     <button
       type="button"
-      className={active ? "active" : ""}
+      className={["toolbar-button", active ? "active" : "", className].filter(Boolean).join(" ")}
+      data-format={format}
       title={title}
       aria-label={title}
       aria-pressed={active || undefined}
@@ -59,7 +70,7 @@ function ToolbarButton({ label, title, active = false, disabled = false, onClick
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
     >
-      {label}
+      <span className="toolbar-icon">{label}</span>
     </button>
   );
 }
@@ -635,10 +646,7 @@ export function App(): ReactElement {
         <section className="panel editor-panel" aria-labelledby="editor-heading">
           <div className="section-heading">
             <h2 id="editor-heading">암호화 본문 작성</h2>
-          </div>
-          <div className="editor-toolbar-row">
-            <div className="editor-actions">
-              <div className="mode-toggle" aria-label="본문 작성 모드">
+            <div className="mode-toggle editor-mode-toggle" aria-label="본문 작성 모드">
                 <button
                   type="button"
                   className={editorMode === "visual" ? "active" : ""}
@@ -654,16 +662,19 @@ export function App(): ReactElement {
                   HTML 보기
                 </button>
               </div>
+          </div>
+          <div className="editor-toolbar-row">
+            <div className="editor-actions">
             <div className="toolbar" aria-label="본문 서식">
               <div className="toolbar-section">
                 <ToolbarButton
-                  label="Undo"
+                  label="↶"
                   title="실행 취소"
                   disabled={!canRunEditorCommand(() => editor!.can().undo())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().undo().run() ?? false)}
                 />
                 <ToolbarButton
-                  label="Redo"
+                  label="↷"
                   title="다시 실행"
                   disabled={!canRunEditorCommand(() => editor!.can().redo())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().redo().run() ?? false)}
@@ -678,10 +689,10 @@ export function App(): ReactElement {
                   disabled={!editor}
                   onChange={(event) => setBlockStyle(event.target.value as BlockStyle)}
                 >
-                  <option value="paragraph">문단</option>
-                  <option value="heading-1">제목 1</option>
-                  <option value="heading-2">제목 2</option>
-                  <option value="heading-3">제목 3</option>
+                  <option value="paragraph">P</option>
+                  <option value="heading-1">H1</option>
+                  <option value="heading-2">H2</option>
+                  <option value="heading-3">H3</option>
                 </select>
               </div>
               <div className="toolbar-section">
@@ -689,6 +700,7 @@ export function App(): ReactElement {
                   label="B"
                   title="굵게"
                   active={isEditorActive("bold")}
+                  format="bold"
                   disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleBold().run())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBold().run() ?? false)}
                 />
@@ -696,6 +708,7 @@ export function App(): ReactElement {
                   label="I"
                   title="기울임"
                   active={isEditorActive("italic")}
+                  format="italic"
                   disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleItalic().run())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().toggleItalic().run() ?? false)}
                 />
@@ -703,6 +716,7 @@ export function App(): ReactElement {
                   label="U"
                   title="밑줄"
                   active={isEditorActive("underline")}
+                  format="underline"
                   disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleUnderline().run())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().toggleUnderline().run() ?? false)}
                 />
@@ -710,18 +724,19 @@ export function App(): ReactElement {
                   label="S"
                   title="취소선"
                   active={isEditorActive("strike")}
+                  format="strike"
                   disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleStrike().run())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().toggleStrike().run() ?? false)}
                 />
                 <ToolbarButton
-                  label="Code"
+                  label="&lt;/&gt;"
                   title="인라인 코드"
                   active={isEditorActive("code")}
                   disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleCode().run())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().toggleCode().run() ?? false)}
                 />
                 <ToolbarButton
-                  label="Clear"
+                  label="Tx"
                   title="서식 지우기"
                   disabled={!editor}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().unsetAllMarks().clearNodes().run() ?? false)}
@@ -729,35 +744,35 @@ export function App(): ReactElement {
               </div>
               <div className="toolbar-section">
                 <ToolbarButton
-                  label="UL"
+                  label="☷"
                   title="글머리 목록"
                   active={isEditorActive("bulletList")}
                   disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleBulletList().run())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBulletList().run() ?? false)}
                 />
                 <ToolbarButton
-                  label="OL"
+                  label="1."
                   title="번호 목록"
                   active={isEditorActive("orderedList")}
                   disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleOrderedList().run())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().toggleOrderedList().run() ?? false)}
                 />
                 <ToolbarButton
-                  label="Quote"
+                  label="❝"
                   title="인용 블록"
                   active={isEditorActive("blockquote")}
                   disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleBlockquote().run())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().toggleBlockquote().run() ?? false)}
                 />
                 <ToolbarButton
-                  label="Pre"
+                  label="{ }"
                   title="코드 블록"
                   active={isEditorActive("codeBlock")}
                   disabled={!canRunEditorCommand(() => editor!.can().chain().focus().toggleCodeBlock().run())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().toggleCodeBlock().run() ?? false)}
                 />
                 <ToolbarButton
-                  label="HR"
+                  label="―"
                   title="구분선"
                   disabled={!canRunEditorCommand(() => editor!.can().chain().focus().setHorizontalRule().run())}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().setHorizontalRule().run() ?? false)}
@@ -765,14 +780,14 @@ export function App(): ReactElement {
               </div>
               <div className="toolbar-section">
                 <ToolbarButton
-                  label="Link"
+                  label="↗"
                   title="링크 삽입 또는 수정"
                   active={isEditorActive("link")}
                   disabled={!editor}
                   onClick={handleSetLink}
                 />
                 <ToolbarButton
-                  label="Unlink"
+                  label="↛"
                   title="링크 해제"
                   disabled={!isEditorActive("link")}
                   onClick={() => runEditorCommand(() => editor?.chain().focus().extendMarkRange("link").unsetLink().run() ?? false)}
