@@ -13,7 +13,7 @@ import {
 } from "../../shared/pinPolicy";
 import { issueSecureDocument, type SecureDocPlainContent } from "../../shared/securePackage";
 import { buildSecureHtmlDocument } from "../../shared/viewerHtml";
-import { removeUnsupportedEditorCharacters, sanitizeHtml, stripHtml } from "./sanitizeHtml";
+import { isAllowedLinkHref, removeUnsupportedEditorCharacters, sanitizeHtml, stripHtml } from "./sanitizeHtml";
 
 type EditorMode = "visual" | "html";
 type HeadingLevel = 1 | 2 | 3;
@@ -345,10 +345,6 @@ function compactPrivateMeta(metadata: MetadataState): SecureDocPlainContent["pri
   };
 }
 
-function isAllowedLinkHref(value: string): boolean {
-  return /^(https:\/\/[^\s<>"]+|mailto:[^\s<>"]+|tel:[^\s<>"]+)$/i.test(value.trim());
-}
-
 function normalizeLinkHref(value: string): string | null {
   const trimmed = removeUnsupportedEditorCharacters(value).trim();
   if (!trimmed) {
@@ -491,6 +487,7 @@ export function App(): ReactElement {
   function runEditorCommand(action: () => boolean): void {
     if (editorMode !== "visual") {
       switchEditorMode("visual");
+      return;
     }
     action();
   }

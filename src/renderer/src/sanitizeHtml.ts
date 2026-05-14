@@ -51,13 +51,25 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
 };
 
 const ALLOWED_ALIGNMENTS = new Set(["center", "right", "justify"]);
+const ALLOWED_LINK_PROTOCOLS = new Set(["https:", "mailto:", "tel:"]);
 
-function isSafeUrl(value: string, imageOnly: boolean): boolean {
+export function isAllowedLinkHref(value: string): boolean {
   const trimmed = value.trim();
-  if (imageOnly) {
-    return /^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(trimmed) || /^blob:/i.test(trimmed);
+  if (!trimmed || /[\s<>"']/.test(trimmed)) {
+    return false;
   }
-  return /^(https:|mailto:|tel:)/i.test(trimmed);
+
+  try {
+    const url = new URL(trimmed);
+    return ALLOWED_LINK_PROTOCOLS.has(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedImageSrc(value: string): boolean {
+  const trimmed = value.trim();
+  return /^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(trimmed) || /^blob:/i.test(trimmed);
 }
 
 export function removeUnsupportedEditorCharacters(input: string): string {
@@ -96,10 +108,10 @@ function cleanNode(node: ParentNode): void {
         element.removeAttribute(attr.name);
         continue;
       }
-      if (attrName === "href" && !isSafeUrl(attr.value, false)) {
+      if (attrName === "href" && !isAllowedLinkHref(attr.value)) {
         element.removeAttribute(attr.name);
       }
-      if (attrName === "src" && !isSafeUrl(attr.value, true)) {
+      if (attrName === "src" && !isAllowedImageSrc(attr.value)) {
         element.removeAttribute(attr.name);
       }
       if (attrName === "data-align" && !ALLOWED_ALIGNMENTS.has(attr.value)) {
