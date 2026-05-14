@@ -40,10 +40,17 @@ const UNSUPPORTED_EDITOR_CHARACTERS = /[\p{Script=Han}\uF900-\uFAFF]/gu;
 
 const ALLOWED_ATTRS: Record<string, Set<string>> = {
   A: new Set(["href", "title"]),
+  H1: new Set(["data-align"]),
+  H2: new Set(["data-align"]),
+  H3: new Set(["data-align"]),
+  H4: new Set(["data-align"]),
   IMG: new Set(["src", "alt", "title"]),
+  P: new Set(["data-align"]),
   TH: new Set(["colspan", "rowspan"]),
   TD: new Set(["colspan", "rowspan"])
 };
+
+const ALLOWED_ALIGNMENTS = new Set(["center", "right", "justify"]);
 
 function isSafeUrl(value: string, imageOnly: boolean): boolean {
   const trimmed = value.trim();
@@ -93,6 +100,9 @@ function cleanNode(node: ParentNode): void {
         element.removeAttribute(attr.name);
       }
       if (attrName === "src" && !isSafeUrl(attr.value, true)) {
+        element.removeAttribute(attr.name);
+      }
+      if (attrName === "data-align" && !ALLOWED_ALIGNMENTS.has(attr.value)) {
         element.removeAttribute(attr.name);
       }
     }

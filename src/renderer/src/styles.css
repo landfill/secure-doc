@@ -271,15 +271,15 @@ select:focus,
   gap: 0;
   width: 100%;
   min-width: 0;
-  overflow-x: auto;
-  flex-wrap: nowrap;
-  scrollbar-width: thin;
+  overflow-x: hidden;
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
 
 .toolbar-section {
   display: flex;
   align-items: center;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   gap: 2px;
   padding: 0 6px;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
@@ -368,7 +368,7 @@ select:focus,
   border-bottom: 1px solid var(--border);
   padding: 8px;
   background: #101017;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .editor-actions {
@@ -514,6 +514,21 @@ select:focus,
   text-underline-offset: 2px;
 }
 
+.rich-editor .tiptap [data-align="center"],
+.preview [data-align="center"] {
+  text-align: center;
+}
+
+.rich-editor .tiptap [data-align="right"],
+.preview [data-align="right"] {
+  text-align: right;
+}
+
+.rich-editor .tiptap [data-align="justify"],
+.preview [data-align="justify"] {
+  text-align: justify;
+}
+
 .source-editor {
   min-height: 280px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -629,6 +644,24 @@ select:focus,
   overflow-wrap: anywhere;
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (max-width: 1280px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .metadata-panel,
+  .editor-panel,
+  .security-panel,
+  .history-panel {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .security-panel {
+    position: static;
+  }
 }
 
 @media (max-width: 1100px) {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { PublishHistoryRecord } from "../../shared/desktopApi";
@@ -17,8 +18,18 @@ import { removeUnsupportedEditorCharacters, sanitizeHtml, stripHtml } from "./sa
 type EditorMode = "visual" | "html";
 type HeadingLevel = 1 | 2 | 3;
 type BlockStyle = "paragraph" | `heading-${HeadingLevel}`;
+type TextAlign = "left" | "center" | "right" | "justify";
 const documentTypes = ["보험증서", "계약서", "고지서", "안내문", "기타"] as const;
 type DocumentType = (typeof documentTypes)[number];
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    secureDocTextAlign: {
+      setTextAlign: (alignment: TextAlign) => ReturnType;
+      unsetTextAlign: () => ReturnType;
+    };
+  }
+}
 
 type MetadataState = {
   title: string;
@@ -38,6 +49,61 @@ type DocumentPreset = {
   watermarkText: string;
   buildHtml: (metadata: MetadataState) => string;
 };
+
+const textAlignments: TextAlign[] = ["left", "center", "right", "justify"];
+
+function isTextAlign(value: unknown): value is TextAlign {
+  return typeof value === "string" && textAlignments.includes(value as TextAlign);
+}
+
+const SecureDocTextAlign = Extension.create({
+  name: "secureDocTextAlign",
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["heading", "paragraph"],
+        attributes: {
+          textAlign: {
+            default: null,
+            parseHTML: (element) => {
+              const value = element.getAttribute("data-align");
+              return isTextAlign(value) && value !== "left" ? value : null;
+            },
+            renderHTML: (attributes) => {
+              const value = attributes.textAlign;
+              return isTextAlign(value) && value !== "left" ? { "data-align": value } : {};
+            }
+          }
+        }
+      }
+    ];
+  },
+
+  addCommands() {
+    return {
+      setTextAlign:
+        (alignment: TextAlign) =>
+        ({ commands }) => {
+          if (!isTextAlign(alignment)) {
+            return false;
+          }
+          if (alignment === "left") {
+            return commands.unsetTextAlign();
+          }
+
+          const results = ["paragraph", "heading"].map((type) => commands.updateAttributes(type, { textAlign: alignment }));
+          return results.some(Boolean);
+        },
+      unsetTextAlign:
+        () =>
+        ({ commands }) => {
+          const results = ["paragraph", "heading"].map((type) => commands.resetAttributes(type, "textAlign"));
+          return results.some(Boolean);
+        }
+    };
+  }
+});
 
 type ToolbarButtonProps = {
   label: string;
@@ -321,7 +387,8 @@ export function App(): ReactElement {
           },
           isAllowedUri: (url) => isAllowedLinkHref(url)
         }
-      })
+      }),
+      SecureDocTextAlign
     ],
     content: initialEditorHtml,
     immediatelyRender: false,
@@ -424,6 +491,22 @@ export function App(): ReactElement {
     return "paragraph";
   }
 
+  function currentTextAlign(): TextAlign {
+    const paragraphAlign = editor?.getAttributes("paragraph").textAlign;
+    const headingAlign = editor?.getAttributes("heading").textAlign;
+    if (isTextAlign(paragraphAlign)) {
+      return paragraphAlign;
+    }
+    if (isTextAlign(headingAlign)) {
+      return headingAlign;
+    }
+    return "left";
+  }
+
+  function canSetTextAlign(): boolean {
+    return Boolean(editor && (editor.isActive("paragraph") || editor.isActive("heading")));
+  }
+
   function setBlockStyle(value: BlockStyle): void {
     if (value === "paragraph") {
       runEditorCommand(() => editor?.chain().focus().setParagraph().run() ?? false);
@@ -432,6 +515,10 @@ export function App(): ReactElement {
 
     const level = Number(value.replace("heading-", "")) as HeadingLevel;
     runEditorCommand(() => editor?.chain().focus().setHeading({ level }).run() ?? false);
+  }
+
+  function setTextAlign(alignment: TextAlign): void {
+    runEditorCommand(() => editor?.chain().focus().setTextAlign(alignment).run() ?? false);
   }
 
   function handleSetLink(): void {
@@ -694,6 +781,36 @@ export function App(): ReactElement {
                   <option value="heading-2">H2</option>
                   <option value="heading-3">H3</option>
                 </select>
+              </div>
+              <div className="toolbar-section">
+                <ToolbarButton
+                  label="↤"
+                  title="왼쪽 정렬"
+                  active={currentTextAlign() === "left"}
+                  disabled={!canSetTextAlign()}
+                  onClick={() => setTextAlign("left")}
+                />
+                <ToolbarButton
+                  label="↔"
+                  title="가운데 정렬"
+                  active={currentTextAlign() === "center"}
+                  disabled={!canSetTextAlign()}
+                  onClick={() => setTextAlign("center")}
+                />
+                <ToolbarButton
+                  label="↦"
+                  title="오른쪽 정렬"
+                  active={currentTextAlign() === "right"}
+                  disabled={!canSetTextAlign()}
+                  onClick={() => setTextAlign("right")}
+                />
+                <ToolbarButton
+                  label="☰"
+                  title="양쪽 정렬"
+                  active={currentTextAlign() === "justify"}
+                  disabled={!canSetTextAlign()}
+                  onClick={() => setTextAlign("justify")}
+                />
               </div>
               <div className="toolbar-section">
                 <ToolbarButton

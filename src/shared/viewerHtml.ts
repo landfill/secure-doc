@@ -206,6 +206,15 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       text-decoration: underline;
       text-underline-offset: 2px;
     }
+    .document-inner [data-align="center"] {
+      text-align: center;
+    }
+    .document-inner [data-align="right"] {
+      text-align: right;
+    }
+    .document-inner [data-align="justify"] {
+      text-align: justify;
+    }
     .watermark {
       display: none;
       position: fixed;
@@ -399,10 +408,16 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     const removedTags = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "FORM", "INPUT", "BUTTON"]);
     const allowedAttrs = {
       A: new Set(["href", "title"]),
+      H1: new Set(["data-align"]),
+      H2: new Set(["data-align"]),
+      H3: new Set(["data-align"]),
+      H4: new Set(["data-align"]),
       IMG: new Set(["src", "alt", "title"]),
+      P: new Set(["data-align"]),
       TH: new Set(["colspan", "rowspan"]),
       TD: new Set(["colspan", "rowspan"])
     };
+    const allowedAlignments = new Set(["center", "right", "justify"]);
 
     function isSafeUrl(value, imageOnly) {
       const trimmed = String(value || "").trim();
@@ -443,6 +458,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
           }
           if (attrName === "href" && !isSafeUrl(attr.value, false)) element.removeAttribute(attr.name);
           if (attrName === "src" && !isSafeUrl(attr.value, true)) element.removeAttribute(attr.name);
+          if (attrName === "data-align" && !allowedAlignments.has(attr.value)) element.removeAttribute(attr.name);
         }
         clean(element);
       }
