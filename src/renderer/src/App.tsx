@@ -136,7 +136,16 @@ function ToolbarButton({
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
     >
-      <span className="toolbar-icon">{label}</span>
+      {format?.startsWith("align-") ? (
+        <span className="toolbar-align-icon" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+          <span />
+        </span>
+      ) : (
+        <span className="toolbar-icon">{label}</span>
+      )}
     </button>
   );
 }
@@ -812,29 +821,33 @@ export function App(): ReactElement {
               </div>
               <div className="toolbar-section">
                 <ToolbarButton
-                  label="↤"
+                  label=""
                   title="왼쪽 정렬"
+                  format="align-left"
                   active={currentTextAlign() === "left"}
                   disabled={!canSetTextAlign()}
                   onClick={() => setTextAlign("left")}
                 />
                 <ToolbarButton
-                  label="↔"
+                  label=""
                   title="가운데 정렬"
+                  format="align-center"
                   active={currentTextAlign() === "center"}
                   disabled={!canSetTextAlign()}
                   onClick={() => setTextAlign("center")}
                 />
                 <ToolbarButton
-                  label="↦"
+                  label=""
                   title="오른쪽 정렬"
+                  format="align-right"
                   active={currentTextAlign() === "right"}
                   disabled={!canSetTextAlign()}
                   onClick={() => setTextAlign("right")}
                 />
                 <ToolbarButton
-                  label="☰"
+                  label=""
                   title="양쪽 정렬"
+                  format="align-justify"
                   active={currentTextAlign() === "justify"}
                   disabled={!canSetTextAlign()}
                   onClick={() => setTextAlign("justify")}

@@ -341,6 +341,37 @@ select:focus,
   line-height: 1;
 }
 
+.toolbar-align-icon {
+  display: grid;
+  align-content: center;
+  width: 18px;
+  height: 18px;
+  row-gap: 3px;
+  color: currentColor;
+}
+
+.toolbar-align-icon span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.toolbar-button[data-format="align-left"] .toolbar-align-icon span:nth-child(even) {
+  width: 12px;
+}
+
+.toolbar-button[data-format="align-center"] .toolbar-align-icon span:nth-child(even) {
+  width: 12px;
+  margin-inline: auto;
+}
+
+.toolbar-button[data-format="align-right"] .toolbar-align-icon span:nth-child(even) {
+  width: 12px;
+  margin-left: auto;
+}
+
 .toolbar-button[data-format="bold"] .toolbar-icon {
   font-weight: 900;
 }
