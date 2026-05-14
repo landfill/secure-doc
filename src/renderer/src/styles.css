@@ -218,14 +218,19 @@ button.primary {
 }
 
 .metadata-panel .form-grid {
-  grid-template-columns: minmax(128px, 0.7fr) minmax(220px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr);
+  grid-template-columns:
+    minmax(116px, 0.7fr)
+    minmax(220px, 1.8fr)
+    minmax(120px, 0.75fr)
+    minmax(120px, 0.75fr)
+    minmax(128px, 0.8fr)
+    minmax(132px, 0.8fr);
 }
 
 .document-meta-grid {
   grid-template-areas:
-    "type title title title"
-    "issuer issuer recipient recipient"
-    "number date watermark watermark";
+    "type title title title title title"
+    "issuer recipient number date watermark .";
 }
 
 .metadata-panel label {
@@ -806,7 +811,7 @@ select:focus,
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1180px) {
   .metadata-panel .form-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -814,8 +819,8 @@ select:focus,
   .document-meta-grid {
     grid-template-areas:
       "type title title title"
-      "issuer issuer recipient recipient"
-      "number date watermark watermark";
+      "issuer recipient number date"
+      "watermark . . .";
   }
 }
 
@@ -854,7 +859,7 @@ select:focus,
       "type title"
       "issuer recipient"
       "number date"
-      "watermark watermark";
+      "watermark .";
   }
 
   .admin-meta-grid {
