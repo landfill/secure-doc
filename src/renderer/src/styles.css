@@ -224,7 +224,7 @@ button.primary {
 .document-meta-grid {
   grid-template-areas:
     "type type title title title title title title title title title title"
-    "issuer issuer issuer recipient recipient recipient number number date date watermark watermark";
+    "issuer issuer recipient recipient number number date date watermark watermark . .";
 }
 
 .metadata-panel label {
@@ -813,8 +813,8 @@ select:focus,
   .document-meta-grid {
     grid-template-areas:
       "type title title title title title"
-      "issuer issuer recipient recipient number number"
-      "date date watermark watermark . .";
+      "issuer recipient number number date date"
+      "watermark watermark . . . .";
   }
 }
 
