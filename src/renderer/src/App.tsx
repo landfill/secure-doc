@@ -627,6 +627,7 @@ export function App(): ReactElement {
   const [activeTemplateId, setActiveTemplateId] = useState(DEFAULT_DOCUMENT_TEMPLATE_ID);
   const [selectedBrandingPresetKey, setSelectedBrandingPresetKey] = useState("");
   const [activeBrandingPresetKey, setActiveBrandingPresetKey] = useState("");
+  const [pendingTemplateOverwriteId, setPendingTemplateOverwriteId] = useState("");
   const screenRootRef = useRef<HTMLDivElement | null>(null);
   const didMountScreenRef = useRef(false);
   const programmaticEditorUpdateRef = useRef(false);
@@ -655,6 +656,10 @@ export function App(): ReactElement {
   const activeTemplate = useMemo(
     () => getDocumentTemplateById(activeTemplateId) ?? defaultDocumentTemplate,
     [activeTemplateId]
+  );
+  const pendingTemplateOverwrite = useMemo(
+    () => (pendingTemplateOverwriteId ? getDocumentTemplateById(pendingTemplateOverwriteId) ?? null : null),
+    [pendingTemplateOverwriteId]
   );
   const activeBrandingPresets = pluginContributions.brandingPresets;
   const selectedBrandingPreset =
@@ -881,6 +886,10 @@ export function App(): ReactElement {
   }
 
   function shouldConfirmTemplateOverwrite(nextHtml: string): boolean {
+    if (selectedTemplateId === activeTemplateId && syncPresetWithMetadata) {
+      return false;
+    }
+
     const currentHtml = currentEditorHtmlSnapshot();
     return stripHtml(currentHtml).length > 0 && currentHtml !== sanitizeHtml(nextHtml);
   }
@@ -891,15 +900,18 @@ export function App(): ReactElement {
 
     if (
       confirmOverwrite &&
-      shouldConfirmTemplateOverwrite(nextHtml) &&
-      !window.confirm("현재 본문을 선택한 템플릿으로 덮어씁니다. 계속할까요?")
+      shouldConfirmTemplateOverwrite(nextHtml)
     ) {
+      setPendingTemplateOverwriteId(template.id);
+      setStatus("");
+      setError("");
       return;
     }
 
     setMetadata(nextMetadata);
     setSelectedTemplateId(template.id);
     setActiveTemplateId(template.id);
+    setPendingTemplateOverwriteId("");
     setSyncPresetWithMetadata(true);
     replaceEditorHtml(nextHtml);
     setStatus(`${template.name} 템플릿을 본문에 적용했습니다.`);
@@ -908,6 +920,16 @@ export function App(): ReactElement {
 
   function handleApplySelectedTemplate(): void {
     applyTemplate(selectedTemplate);
+  }
+
+  function closeTemplateOverwriteDialog(): void {
+    setPendingTemplateOverwriteId("");
+  }
+
+  function confirmTemplateOverwrite(): void {
+    if (pendingTemplateOverwrite) {
+      applyTemplate(pendingTemplateOverwrite, false);
+    }
   }
 
   function applyBrandingPreset(preset: ResolvedPluginBrandingPresetContribution | null): void {
@@ -2263,6 +2285,37 @@ export function App(): ReactElement {
             )}
             {status && <div className="status">{status}</div>}
             {error && <div className="error">{error}</div>}
+          </section>
+        </div>
+      )}
+      {pendingTemplateOverwrite && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeTemplateOverwriteDialog();
+            }
+          }}
+        >
+          <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="template-overwrite-heading">
+            <div className="publish-dialog-header">
+              <h2 id="template-overwrite-heading">본문 덮어쓰기 확인</h2>
+              <button type="button" className="dialog-close" onClick={closeTemplateOverwriteDialog}>
+                닫기
+              </button>
+            </div>
+            <p className="security-note publish-note">
+              현재 본문을 {pendingTemplateOverwrite.name} 템플릿 내용으로 바꿉니다. 이 작업은 현재 편집 중인 본문을 덮어씁니다.
+            </p>
+            <div className="button-row publish-dialog-actions">
+              <button type="button" onClick={closeTemplateOverwriteDialog}>
+                취소
+              </button>
+              <button type="button" className="primary" onClick={confirmTemplateOverwrite}>
+                템플릿 적용
+              </button>
+            </div>
           </section>
         </div>
       )}
