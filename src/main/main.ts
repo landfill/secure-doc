@@ -1,15 +1,44 @@
-import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
 import { createHistoryStore } from "./history";
+import { assertPackageContentMatchesHash, sha256Base64Url } from "./packageIntegrity";
 import { createPluginStore } from "./pluginStore";
+import { createGmailSmtpPluginService } from "./smtpPlugin";
 import type { PublishHistoryRecord, SavePackageRequest, SavePackageResult } from "../shared/desktopApi";
 import type { PluginContributions, PluginDescriptor } from "../shared/plugins";
 
 let mainWindow: BrowserWindow | null = null;
 const historyStorePromise = app.whenReady().then(() => createHistoryStore(app.getPath("userData")));
 const pluginStorePromise = app.whenReady().then(() => createPluginStore(app.getPath("userData")));
+const smtpPluginServicePromise = app.whenReady().then(() =>
+  createGmailSmtpPluginService({
+    userDataPath: app.getPath("userData"),
+    secretCodec: safeStorage,
+    async isPluginEnabled(pluginId) {
+      const pluginStore = await pluginStorePromise;
+      return (await pluginStore.list()).some((plugin) => plugin.id === pluginId && plugin.enabled);
+    },
+    async readHistoryAttachment(request) {
+      const historyStore = await historyStorePromise;
+      const historyRecord = (await historyStore.list()).find(
+        (record) => record.documentId === request.documentId && record.outputPath === request.outputPath
+      );
+      if (!historyRecord) {
+        throw new Error("Selected publish history item is not available for email delivery.");
+      }
+
+      let attachmentHtml: string;
+      try {
+        attachmentHtml = await readFile(historyRecord.outputPath, "utf8");
+      } catch {
+        throw new Error("Saved secure HTML file is no longer available. Recreate the package before sending email.");
+      }
+      assertPackageContentMatchesHash(attachmentHtml, historyRecord.packageSha256);
+      return attachmentHtml;
+    }
+  })
+);
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -37,10 +66,6 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
-}
-
-function sha256Base64Url(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("base64url");
 }
 
 function safeSuggestedName(name: string): string {
@@ -119,6 +144,42 @@ ipcMain.handle(
     return pluginStore.setEnabled(pluginId, enabled);
   }
 );
+
+ipcMain.handle("secure-doc:plugins:get-settings", async (_event, pluginId: string) => {
+  if (typeof pluginId !== "string") {
+    throw new Error("Invalid plugin settings request.");
+  }
+
+  const smtpPluginService = await smtpPluginServicePromise;
+  return smtpPluginService.getSettings(pluginId);
+});
+
+ipcMain.handle("secure-doc:plugins:save-settings", async (_event, pluginId: string, values: unknown) => {
+  if (typeof pluginId !== "string") {
+    throw new Error("Invalid plugin settings save request.");
+  }
+
+  const smtpPluginService = await smtpPluginServicePromise;
+  return smtpPluginService.saveSettings(pluginId, values);
+});
+
+ipcMain.handle("secure-doc:plugins:clear-settings", async (_event, pluginId: string) => {
+  if (typeof pluginId !== "string") {
+    throw new Error("Invalid plugin settings clear request.");
+  }
+
+  const smtpPluginService = await smtpPluginServicePromise;
+  return smtpPluginService.clearSettings(pluginId);
+});
+
+ipcMain.handle("secure-doc:plugins:run-action", async (_event, pluginId: string, actionId: string, payload?: unknown) => {
+  if (typeof pluginId !== "string" || typeof actionId !== "string") {
+    throw new Error("Invalid plugin action request.");
+  }
+
+  const smtpPluginService = await smtpPluginServicePromise;
+  return smtpPluginService.runAction(pluginId, actionId, payload);
+});
 
 app.whenReady().then(() => {
   createWindow();

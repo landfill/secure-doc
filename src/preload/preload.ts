@@ -20,6 +20,18 @@ const api: SecureDocDesktopApi = {
     },
     getContributions() {
       return ipcRenderer.invoke("secure-doc:plugins:get-contributions");
+    },
+    getSettings(pluginId: string) {
+      return ipcRenderer.invoke("secure-doc:plugins:get-settings", pluginId);
+    },
+    saveSettings(pluginId: string, values) {
+      return ipcRenderer.invoke("secure-doc:plugins:save-settings", pluginId, values);
+    },
+    clearSettings(pluginId: string) {
+      return ipcRenderer.invoke("secure-doc:plugins:clear-settings", pluginId);
+    },
+    runAction(pluginId: string, actionId: string, payload?: unknown) {
+      return ipcRenderer.invoke("secure-doc:plugins:run-action", pluginId, actionId, payload);
     }
   }
 };

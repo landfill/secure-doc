@@ -17,11 +17,13 @@ test("built-in plugin manifests expose stable ids, permissions, and extension po
     "network:smtp",
     "secret:safeStorage",
     "package:read",
+    "history:read",
     "ui:settings",
     "ui:publish-action"
   ]);
   assert.equal(smtpPlugin.contributes.settingsPanel, true);
   assert.equal(smtpPlugin.contributes.publishActions?.[0]?.id, "send-email");
+  assert.equal(smtpPlugin.contributes.historyActions?.[0]?.id, "send-email-from-history");
 });
 
 test("plugin descriptors and contributions are driven only by enabled state", () => {
@@ -36,5 +38,6 @@ test("plugin descriptors and contributions are driven only by enabled state", ()
   assert.equal(contributions.publishActions.length, 1);
   assert.equal(contributions.publishActions[0].pluginId, "delivery.smtp.gmail");
   assert.equal(contributions.templates.length, 0);
-  assert.equal(contributions.historyActions.length, 0);
+  assert.equal(contributions.historyActions.length, 1);
+  assert.equal(contributions.historyActions[0].pluginId, "delivery.smtp.gmail");
 });

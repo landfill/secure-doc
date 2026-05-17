@@ -27,10 +27,52 @@ export interface SavePackageResult {
   packageSha256?: string;
 }
 
+export interface SmtpSettingsView {
+  pluginId: "delivery.smtp.gmail";
+  host: string;
+  port: number;
+  senderEmail: string;
+  hasAppPassword: boolean;
+}
+
+export interface SaveSmtpSettingsRequest {
+  host: string;
+  port: number;
+  senderEmail: string;
+  appPassword?: string;
+}
+
+export interface SendSmtpEmailRequest {
+  documentId: string;
+  outputPath: string;
+  recipientEmail: string;
+  subject: string;
+  attachmentFileName: string;
+}
+
+export type SendSmtpHistoryEmailRequest = SendSmtpEmailRequest;
+
+export interface SendSmtpEmailResult {
+  sent: true;
+  messageId?: string;
+}
+
+export interface SmtpConnectionTestResult {
+  ok: true;
+}
+
+export type PluginSettingsView = SmtpSettingsView;
+export type SavePluginSettingsRequest = SaveSmtpSettingsRequest;
+export type PluginActionResult = SmtpConnectionTestResult | SendSmtpEmailResult;
+
 export interface SecureDocPluginApi {
   list(): Promise<PluginDescriptor[]>;
   setEnabled(pluginId: string, enabled: boolean): Promise<PluginDescriptor[]>;
   getContributions(): Promise<PluginContributions>;
+  getSettings(pluginId: string): Promise<PluginSettingsView>;
+  saveSettings(pluginId: string, values: SavePluginSettingsRequest): Promise<PluginSettingsView>;
+  clearSettings(pluginId: string): Promise<PluginSettingsView>;
+  runAction(pluginId: string, actionId: string, payload?: unknown): Promise<PluginActionResult>;
 }
 
 export interface SecureDocDesktopApi {
