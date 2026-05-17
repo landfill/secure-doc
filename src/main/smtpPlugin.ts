@@ -49,6 +49,7 @@ interface SmtpTransportOptions {
   port: number;
   secure: boolean;
   requireTLS: boolean;
+  allowInternalNetworkInterfaces?: boolean;
   auth: {
     user: string;
     pass: string;
@@ -442,18 +443,24 @@ export function createSmtpDeliveryPluginService({
 
   async function createTransportContext(pluginId: SmtpDeliveryPluginId): Promise<SmtpTransportContext> {
     const settings = await loadCredentials(pluginId);
+    const transportOptions: SmtpTransportOptions = {
+      host: settings.host,
+      port: settings.port,
+      secure: settings.secure,
+      requireTLS: settings.requireTLS,
+      auth: {
+        user: settings.username,
+        pass: settings.password
+      }
+    };
+
+    if (pluginId === GENERIC_SMTP_PLUGIN_ID) {
+      transportOptions.allowInternalNetworkInterfaces = true;
+    }
+
     return {
       senderEmail: settings.senderEmail,
-      transport: createTransport({
-        host: settings.host,
-        port: settings.port,
-        secure: settings.secure,
-        requireTLS: settings.requireTLS,
-        auth: {
-          user: settings.username,
-          pass: settings.password
-        }
-      })
+      transport: createTransport(transportOptions)
     };
   }
 

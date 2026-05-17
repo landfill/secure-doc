@@ -344,6 +344,7 @@ test("generic SMTP settings store encrypted credentials and send through configu
       port: 2525,
       secure: false,
       requireTLS: true,
+      allowInternalNetworkInterfaces: true,
       auth: {
         user: "smtp-user",
         pass: "smtp secret 123"
