@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
 import { createHistoryStore } from "./history";
+import { assertPackageContentMatchesHash, sha256Base64Url } from "./packageIntegrity";
 import { createPluginStore } from "./pluginStore";
 import { createGmailSmtpPluginService } from "./smtpPlugin";
 import type { PublishHistoryRecord, SavePackageRequest, SavePackageResult } from "../shared/desktopApi";
@@ -28,11 +28,14 @@ const smtpPluginServicePromise = app.whenReady().then(() =>
         throw new Error("Selected publish history item is not available for email delivery.");
       }
 
+      let attachmentHtml: string;
       try {
-        return await readFile(historyRecord.outputPath, "utf8");
+        attachmentHtml = await readFile(historyRecord.outputPath, "utf8");
       } catch {
         throw new Error("Saved secure HTML file is no longer available. Recreate the package before sending email.");
       }
+      assertPackageContentMatchesHash(attachmentHtml, historyRecord.packageSha256);
+      return attachmentHtml;
     }
   })
 );
@@ -63,10 +66,6 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
-}
-
-function sha256Base64Url(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("base64url");
 }
 
 function safeSuggestedName(name: string): string {
