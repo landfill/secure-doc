@@ -31,6 +31,12 @@ test("blocks obvious weak PINs across the allowed range", () => {
   }
 });
 
+test("supports stronger minimum length policy without lowering the default bounds", () => {
+  assert.equal(evaluatePinPolicy("Abc123!", { minLength: 10 }).valid, false);
+  assert.equal(evaluatePinPolicy("Abc123!xyz", { minLength: 10 }).valid, true);
+  assert.throws(() => evaluatePinPolicy("Abc123!xyz", { minLength: 16 }), /minimum length/);
+});
+
 test("generates a default-length mixed PIN from cryptographic random values and skips weak values", () => {
   const chunks = [
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],

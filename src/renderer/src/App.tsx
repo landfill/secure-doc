@@ -3,17 +3,23 @@ import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type {
+  AuditPackageIntegrityReport,
   PublishHistoryRecord,
   SaveSmtpSettingsRequest,
   SendSmtpEmailResult,
   SmtpSettingsView
 } from "../../shared/desktopApi";
 import {
+  AUDIT_INTEGRITY_HISTORY_ACTION_ID,
+  AUDIT_INTEGRITY_PLUGIN_ID,
   EMPTY_PLUGIN_CONTRIBUTIONS,
   GMAIL_SMTP_HISTORY_SEND_ACTION_ID,
   GMAIL_SMTP_PLUGIN_ID,
   GMAIL_SMTP_SEND_ACTION_ID,
   GMAIL_SMTP_TEST_ACTION_ID,
+  STRICT_PIN_POLICY_PLUGIN_ID,
+  STRICT_PIN_POLICY_PROFILE_ID,
+  type PluginCategory,
   type PluginContributions,
   type PluginDescriptor,
   type PluginPermission
@@ -60,6 +66,9 @@ type MetadataState = {
 };
 
 type DocumentPreset = {
+  id: string;
+  name: DocumentType;
+  category: "notice" | "contract" | "policy" | "general";
   title: string;
   description: string;
   watermarkText: string;
@@ -123,12 +132,92 @@ const pluginPermissionLabels: Record<PluginPermission, string> = {
   "ui:publish-action": "발행 액션"
 };
 
+const pluginCategoryLabels: Record<PluginCategory, string> = {
+  delivery: "전달",
+  template: "템플릿",
+  audit: "감사",
+  branding: "브랜딩",
+  policy: "정책"
+};
+
 function isTextAlign(value: unknown): value is TextAlign {
   return typeof value === "string" && textAlignments.includes(value as TextAlign);
 }
 
+function pluginCategoryLabel(category: PluginCategory): string {
+  return pluginCategoryLabels[category];
+}
+
 function pluginPermissionLabel(permission: PluginPermission): string {
   return pluginPermissionLabels[permission];
+}
+
+function pluginDisplayName(plugin: PluginDescriptor): string {
+  if (plugin.id === GMAIL_SMTP_PLUGIN_ID) {
+    return "Gmail SMTP 발송";
+  }
+  if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
+    return "패키지 무결성 감사";
+  }
+  if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
+    return "강화 PIN 정책";
+  }
+  return plugin.name;
+}
+
+function pluginDisplayDescription(plugin: PluginDescriptor): string {
+  if (plugin.id === GMAIL_SMTP_PLUGIN_ID) {
+    return "보안 HTML 파일을 Gmail SMTP 메일에 첨부해 외부 수신자에게 보냅니다.";
+  }
+  if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
+    return "저장된 보안 HTML 파일이 발행 당시 기록된 SHA-256 해시와 일치하는지 검사합니다.";
+  }
+  if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
+    return "중요 문서 발행용 보안 기준을 강화해 더 긴 PIN과 기본 KDF 반복 횟수를 요구합니다.";
+  }
+  return plugin.description;
+}
+
+function pluginFeatureDescriptions(plugin: PluginDescriptor): string[] {
+  if (plugin.id === GMAIL_SMTP_PLUGIN_ID) {
+    return [
+      "플러그인 화면에 Gmail SMTP 계정과 앱 비밀번호 설정 패널이 표시됩니다.",
+      "문서 발행 직후 보안 HTML 파일을 이메일 첨부로 보낼 수 있습니다.",
+      "발행 이력에 저장된 보안 HTML 파일을 다시 이메일로 보낼 수 있습니다."
+    ];
+  }
+  if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
+    return [
+      "발행 이력에서 저장된 HTML 파일의 SHA-256 해시를 다시 계산합니다.",
+      "발행 당시 기록된 해시와 비교해 정상, 파일 없음, 변조 의심 상태를 보여줍니다.",
+      "PIN, 평문 본문, 암호화 키를 리포트에 포함하지 않습니다."
+    ];
+  }
+  if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
+    return [
+      "문서 발행 PIN을 10자 이상 15자 이하로 제한합니다.",
+      "낮은 PBKDF2 600,000회 호환 모드를 선택할 수 없게 합니다.",
+      "기본 보안 기준보다 약한 정책은 적용하지 않습니다."
+    ];
+  }
+
+  const descriptions: string[] = [];
+  if (plugin.contributes.settingsPanel) {
+    descriptions.push("설정 화면에서 이 플러그인의 계정, 비밀번호, 옵션을 관리합니다.");
+  }
+  for (const action of plugin.contributes.publishActions ?? []) {
+    descriptions.push(`문서 발행 직후: ${action.description}`);
+  }
+  for (const action of plugin.contributes.historyActions ?? []) {
+    descriptions.push(`발행 이력에서: ${action.description}`);
+  }
+  for (const template of plugin.contributes.templates ?? []) {
+    descriptions.push(`문서 작성에서: ${template.description}`);
+  }
+  for (const profile of plugin.contributes.policyProfiles ?? []) {
+    descriptions.push(`발행 정책에서: ${profile.description}`);
+  }
+  return descriptions;
 }
 
 function pluginContributionLabels(plugin: PluginDescriptor): string[] {
@@ -144,6 +233,9 @@ function pluginContributionLabels(plugin: PluginDescriptor): string[] {
   }
   if (plugin.contributes.historyActions?.length) {
     labels.push("이력 액션");
+  }
+  if (plugin.contributes.policyProfiles?.length) {
+    labels.push("정책 프로필");
   }
   return labels;
 }
@@ -166,6 +258,18 @@ function hasActiveSmtpSendAction(contributions: PluginContributions): boolean {
 function hasActiveSmtpHistorySendAction(contributions: PluginContributions): boolean {
   return contributions.historyActions.some(
     (action) => action.pluginId === GMAIL_SMTP_PLUGIN_ID && action.id === GMAIL_SMTP_HISTORY_SEND_ACTION_ID
+  );
+}
+
+function hasActiveAuditIntegrityHistoryAction(contributions: PluginContributions): boolean {
+  return contributions.historyActions.some(
+    (action) => action.pluginId === AUDIT_INTEGRITY_PLUGIN_ID && action.id === AUDIT_INTEGRITY_HISTORY_ACTION_ID
+  );
+}
+
+function hasActiveStrictPinPolicy(contributions: PluginContributions): boolean {
+  return contributions.policyProfiles.some(
+    (profile) => profile.pluginId === STRICT_PIN_POLICY_PLUGIN_ID && profile.id === STRICT_PIN_POLICY_PROFILE_ID
   );
 }
 
@@ -295,6 +399,9 @@ function metadataText(value: string, fallback: string): string {
 
 const documentPresets: Record<DocumentType, DocumentPreset> = {
   보험증서: {
+    id: "core.insurance-certificate",
+    name: "보험증서",
+    category: "policy",
     title: "디지털 안전 보장 보험증서",
     description: "보험증서 형식의 보안 문서 샘플입니다.",
     watermarkText: "CONFIDENTIAL",
@@ -322,6 +429,9 @@ const documentPresets: Record<DocumentType, DocumentPreset> = {
     }
   },
   계약서: {
+    id: "core.contract-basic",
+    name: "계약서",
+    category: "contract",
     title: "서비스 이용 및 협력 계약서",
     description: "갑/을 정보가 자동 반영되는 계약서 샘플입니다.",
     watermarkText: "계약서",
@@ -360,6 +470,9 @@ const documentPresets: Record<DocumentType, DocumentPreset> = {
     }
   },
   고지서: {
+    id: "core.notice-billing",
+    name: "고지서",
+    category: "notice",
     title: "서비스 이용 고지서",
     description: "수신자와 발행자가 자동 반영되는 고지서 샘플입니다.",
     watermarkText: "NOTICE",
@@ -386,6 +499,9 @@ const documentPresets: Record<DocumentType, DocumentPreset> = {
     }
   },
   안내문: {
+    id: "core.notice-secure-open",
+    name: "안내문",
+    category: "notice",
     title: "보안 문서 열람 안내문",
     description: "한자 없이 정리된 안내문 샘플입니다.",
     watermarkText: "공지",
@@ -419,6 +535,9 @@ const documentPresets: Record<DocumentType, DocumentPreset> = {
     }
   },
   기타: {
+    id: "core.general-secure-document",
+    name: "기타",
+    category: "general",
     title: "보안문서",
     description: "자유 형식 보안 문서 샘플입니다.",
     watermarkText: "SECURE",
@@ -435,6 +554,8 @@ const documentPresets: Record<DocumentType, DocumentPreset> = {
     }
   }
 };
+
+const coreDocumentTemplates = documentTypes.map((docType) => documentPresets[docType]);
 
 const defaultMetadata: MetadataState = {
   title: documentPresets["안내문"].title,
@@ -512,17 +633,24 @@ export function App(): ReactElement {
   const [pendingEmailPackage, setPendingEmailPackage] = useState<PendingEmailPackage | null>(null);
   const [emailSendForm, setEmailSendForm] = useState<EmailSendForm>(defaultEmailSendForm);
   const [emailBusy, setEmailBusy] = useState(false);
+  const [auditBusyDocumentId, setAuditBusyDocumentId] = useState<string | null>(null);
+  const [auditReport, setAuditReport] = useState<AuditPackageIntegrityReport | null>(null);
   const [activeNavTarget, setActiveNavTarget] = useState<NavTarget>("document");
   const screenRootRef = useRef<HTMLDivElement | null>(null);
   const didMountScreenRef = useRef(false);
   const programmaticEditorUpdateRef = useRef(false);
 
-  const pinResult = useMemo(() => evaluatePinPolicy(pin), [pin]);
+  const strictPinPolicyEnabled = hasActiveStrictPinPolicy(pluginContributions);
+  const pinResult = useMemo(
+    () => evaluatePinPolicy(pin, strictPinPolicyEnabled ? { minLength: 10 } : undefined),
+    [pin, strictPinPolicyEnabled]
+  );
   const sanitizedPreview = useMemo(() => sanitizeHtml(editorHtml), [editorHtml]);
   const contentText = useMemo(() => stripHtml(sanitizedPreview), [sanitizedPreview]);
   const smtpSendActionEnabled = hasActiveSmtpSendAction(pluginContributions);
   const smtpPluginEnabled = isSmtpPluginEnabled(plugins);
   const smtpHistorySendActionEnabled = hasActiveSmtpHistorySendAction(pluginContributions);
+  const auditHistoryActionEnabled = hasActiveAuditIntegrityHistoryAction(pluginContributions);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -595,7 +723,11 @@ export function App(): ReactElement {
         setSmtpStatus("");
         setSmtpError("");
       }
-      setStatus(`${plugin.name} 플러그인을 ${enabled ? "활성화" : "비활성화"}했습니다.`);
+      if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID && !enabled) {
+        setAuditReport(null);
+        setAuditBusyDocumentId(null);
+      }
+      setStatus(`${pluginDisplayName(plugin)} 플러그인을 ${enabled ? "활성화" : "비활성화"}했습니다.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "플러그인 상태를 변경하지 못했습니다.");
     } finally {
@@ -625,6 +757,12 @@ export function App(): ReactElement {
 
     screenRootRef.current?.focus({ preventScroll: true });
   }, [activeNavTarget]);
+
+  useEffect(() => {
+    if (strictPinPolicyEnabled && iterations < DEFAULT_PIN_KDF_ITERATIONS) {
+      setIterations(DEFAULT_PIN_KDF_ITERATIONS);
+    }
+  }, [iterations, strictPinPolicyEnabled]);
 
   useEffect(() => {
     if (!publishDialogOpen) {
@@ -688,6 +826,11 @@ export function App(): ReactElement {
 
   function handleDocumentTypeChange(docType: DocumentType): void {
     const preset = documentPresets[docType];
+    const hasEditedBody = !syncPresetWithMetadata && contentText.length > 0;
+    if (hasEditedBody && !window.confirm("작성 중인 본문을 선택한 템플릿으로 덮어쓸까요?")) {
+      return;
+    }
+
     const nextMetadata: MetadataState = {
       ...metadata,
       docType,
@@ -699,7 +842,7 @@ export function App(): ReactElement {
     setMetadata(nextMetadata);
     setSyncPresetWithMetadata(true);
     replaceEditorHtml(buildPresetHtml(nextMetadata));
-    setStatus(`${docType} 샘플을 본문에 적용했습니다.`);
+    setStatus(`${preset.name} 템플릿을 본문에 적용했습니다.`);
     setError("");
   }
 
@@ -939,6 +1082,42 @@ export function App(): ReactElement {
     setEmailDialogOpen(true);
   }
 
+  function auditStatusLabel(report: AuditPackageIntegrityReport): string {
+    if (report.status === "verified") {
+      return "정상";
+    }
+    if (report.status === "missing") {
+      return "파일 없음";
+    }
+    return "변조 의심";
+  }
+
+  async function handleAuditIntegrityReport(item: PublishHistoryRecord): Promise<void> {
+    const pluginApi = window.secureDoc?.plugins;
+    if (!pluginApi || !auditHistoryActionEnabled) {
+      setError("Audit plugin is not available.");
+      return;
+    }
+
+    setAuditBusyDocumentId(item.documentId);
+    setStatus("감사 리포트를 생성 중입니다.");
+    setError("");
+    try {
+      const report = (await pluginApi.runAction(AUDIT_INTEGRITY_PLUGIN_ID, AUDIT_INTEGRITY_HISTORY_ACTION_ID, {
+        documentId: item.documentId,
+        outputPath: item.outputPath
+      })) as AuditPackageIntegrityReport;
+      setAuditReport(report);
+      setStatus(report.message);
+    } catch (caught) {
+      setAuditReport(null);
+      setError(caught instanceof Error ? caught.message : "감사 리포트를 생성하지 못했습니다.");
+      setStatus("");
+    } finally {
+      setAuditBusyDocumentId(null);
+    }
+  }
+
   async function handleSendEmail(): Promise<void> {
     const pluginApi = window.secureDoc?.plugins;
     if (!pluginApi || !pendingEmailPackage) {
@@ -1033,6 +1212,9 @@ export function App(): ReactElement {
       }
       if (pinResult.normalizedPin !== pinConfirm.normalize("NFKC").trim()) {
         throw new Error("PIN 확인 입력이 일치하지 않습니다.");
+      }
+      if (strictPinPolicyEnabled && iterations < DEFAULT_PIN_KDF_ITERATIONS) {
+        throw new Error("강화 PIN 정책에서는 기본 PBKDF2 반복 횟수보다 낮은 값을 사용할 수 없습니다.");
       }
       if (!contentText) {
         throw new Error("암호화할 본문을 입력하세요.");
@@ -1157,11 +1339,11 @@ export function App(): ReactElement {
           </div>
           <div className="form-grid document-meta-grid">
             <label className="field-type">
-              문서 유형
+              문서 템플릿
               <select value={metadata.docType} onChange={(event) => handleDocumentTypeChange(event.target.value as DocumentType)}>
-                {documentTypes.map((docType) => (
-                  <option key={docType} value={docType}>
-                    {docType}
+                {coreDocumentTemplates.map((template) => (
+                  <option key={template.id} value={template.name}>
+                    {template.name}
                   </option>
                 ))}
               </select>
@@ -1472,12 +1654,13 @@ export function App(): ReactElement {
                   <th>SHA-256</th>
                   <th>파일</th>
                   <th>이메일</th>
+                  <th>감사</th>
                 </tr>
               </thead>
               <tbody>
                 {history.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>저장된 발행 이력이 없습니다.</td>
+                    <td colSpan={7}>저장된 발행 이력이 없습니다.</td>
                   </tr>
                 ) : (
                   history.map((item) => (
@@ -1503,12 +1686,48 @@ export function App(): ReactElement {
                           발송
                         </button>
                       </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => void handleAuditIntegrityReport(item)}
+                          disabled={!auditHistoryActionEnabled || auditBusyDocumentId === item.documentId}
+                        >
+                          {auditBusyDocumentId === item.documentId ? "검증 중" : "검증"}
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
+          {auditReport && (
+            <div className={`audit-report ${auditReport.status}`}>
+              <div className="audit-report-header">
+                <strong>감사 리포트</strong>
+                <span>{auditStatusLabel(auditReport)}</span>
+              </div>
+              <dl>
+                <div>
+                  <dt>문서</dt>
+                  <dd>{auditReport.title}</dd>
+                </div>
+                <div>
+                  <dt>문서 ID</dt>
+                  <dd>{auditReport.documentId}</dd>
+                </div>
+                <div>
+                  <dt>검증 시각</dt>
+                  <dd>{new Date(auditReport.checkedAt).toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt>SHA-256</dt>
+                  <dd className="hash">{auditReport.packageSha256}</dd>
+                </div>
+              </dl>
+              <p>{auditReport.message}</p>
+            </div>
+          )}
         </section>
         )}
 
@@ -1526,31 +1745,48 @@ export function App(): ReactElement {
             ) : (
               plugins.map((plugin) => {
                 const contributionLabels = pluginContributionLabels(plugin);
+                const featureDescriptions = pluginFeatureDescriptions(plugin);
+                const displayName = pluginDisplayName(plugin);
                 return (
                   <article className="plugin-item" key={plugin.id}>
                     <div className="plugin-item-main">
                       <div>
                         <div className="plugin-title-row">
-                          <h3>{plugin.name}</h3>
-                          <span className="plugin-category">{plugin.category}</span>
+                          <h3>{displayName}</h3>
+                          <span className="plugin-category">{pluginCategoryLabel(plugin.category)}</span>
                         </div>
-                        <p>{plugin.description}</p>
+                        <p className="plugin-description">{pluginDisplayDescription(plugin)}</p>
                         <div className="plugin-meta">
                           <span>{plugin.id}</span>
                           <span>v{plugin.version}</span>
                         </div>
                       </div>
-                      <label className="plugin-toggle">
-                        <input
-                          type="checkbox"
-                          checked={plugin.enabled}
-                          disabled={pluginBusyId === plugin.id}
-                          onChange={(event) => void handlePluginToggle(plugin, event.target.checked)}
-                        />
-                        <span>{plugin.enabled ? "활성" : "비활성"}</span>
-                      </label>
+                      <button
+                        type="button"
+                        className={["plugin-toggle-button", plugin.enabled ? "enabled" : ""].filter(Boolean).join(" ")}
+                        role="switch"
+                        aria-checked={plugin.enabled}
+                        aria-label={`${displayName} 플러그인 ${plugin.enabled ? "비활성화" : "활성화"}`}
+                        disabled={pluginBusyId === plugin.id}
+                        onClick={() => void handlePluginToggle(plugin, !plugin.enabled)}
+                      >
+                        <span className="plugin-toggle-track" aria-hidden="true">
+                          <span className="plugin-toggle-thumb" />
+                        </span>
+                        <span className="plugin-toggle-text">{plugin.enabled ? "활성" : "비활성"}</span>
+                      </button>
                     </div>
-                    <div className="plugin-chip-row" aria-label={`${plugin.name} 권한`}>
+                    {featureDescriptions.length > 0 && (
+                      <div className="plugin-feature-list" aria-label={`${displayName} 기능 설명`}>
+                        <strong>활성화하면</strong>
+                        <ul>
+                          {featureDescriptions.map((description) => (
+                            <li key={description}>{description}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="plugin-chip-row" aria-label={`${displayName} 권한`}>
                       {plugin.permissions.length === 0 ? (
                         <span className="plugin-chip muted">권한 없음</span>
                       ) : (
@@ -1561,7 +1797,7 @@ export function App(): ReactElement {
                         ))
                       )}
                     </div>
-                    <div className="plugin-chip-row" aria-label={`${plugin.name} 확장 지점`}>
+                    <div className="plugin-chip-row" aria-label={`${displayName} 확장 지점`}>
                       {contributionLabels.map((label) => (
                         <span className="plugin-chip contribution" key={label}>
                           {label}
@@ -1706,7 +1942,9 @@ export function App(): ReactElement {
                 PBKDF2 반복 횟수
                 <select value={iterations} onChange={(event) => setIterations(Number(event.target.value))}>
                   <option value={DEFAULT_PIN_KDF_ITERATIONS}>1,000,000 기본</option>
-                  <option value={COMPAT_PIN_KDF_ITERATIONS}>600,000 저사양 호환</option>
+                  <option value={COMPAT_PIN_KDF_ITERATIONS} disabled={strictPinPolicyEnabled}>
+                    600,000 저사양 호환
+                  </option>
                 </select>
               </label>
             </div>

@@ -12,6 +12,11 @@ export type PinPolicyResult =
   | { valid: true; normalizedPin: string; message: string }
   | { valid: false; normalizedPin: string; message: string };
 
+export interface PinPolicyOptions {
+  minLength?: number;
+  maxLength?: number;
+}
+
 export interface PinRandomSource {
   getRandomValues(array: Uint8Array): Uint8Array;
 }
@@ -20,9 +25,19 @@ export function normalizePin(input: string): string {
   return input.normalize("NFKC").trim();
 }
 
-function hasValidLength(pin: string): boolean {
+function resolvePinBounds(options: PinPolicyOptions = {}): { minLength: number; maxLength: number } {
+  const minLength = Math.max(PIN_MIN_LENGTH, options.minLength ?? PIN_MIN_LENGTH);
+  const maxLength = Math.min(PIN_MAX_LENGTH, options.maxLength ?? PIN_MAX_LENGTH);
+  if (minLength > maxLength) {
+    throw new Error("PIN policy minimum length cannot exceed maximum length.");
+  }
+  return { minLength, maxLength };
+}
+
+function hasValidLength(pin: string, options: PinPolicyOptions = {}): boolean {
+  const { minLength, maxLength } = resolvePinBounds(options);
   const length = [...pin].length;
-  return length >= PIN_MIN_LENGTH && length <= PIN_MAX_LENGTH;
+  return length >= minLength && length <= maxLength;
 }
 
 function isRepeatedCharacter(pin: string): boolean {
@@ -40,14 +55,15 @@ function isSequentialDigitRun(pin: string): boolean {
   return forward || backward;
 }
 
-export function evaluatePinPolicy(input: string): PinPolicyResult {
+export function evaluatePinPolicy(input: string, options: PinPolicyOptions = {}): PinPolicyResult {
   const normalizedPin = normalizePin(input);
+  const { minLength, maxLength } = resolvePinBounds(options);
 
-  if (!hasValidLength(normalizedPin) || CONTROL_CHARACTERS.test(normalizedPin)) {
+  if (!hasValidLength(normalizedPin, options) || CONTROL_CHARACTERS.test(normalizedPin)) {
     return {
       valid: false,
       normalizedPin,
-      message: "PIN은 숫자, 문자, 기호를 포함해 6자리 이상 15자리 이내여야 합니다."
+      message: `PIN은 숫자, 문자, 기호를 포함해 ${minLength}자리 이상 ${maxLength}자리 이내여야 합니다.`
     };
   }
 
