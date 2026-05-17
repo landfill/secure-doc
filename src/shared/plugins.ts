@@ -1,3 +1,14 @@
+import {
+  COMPAT_PIN_KDF_ITERATIONS,
+  DEFAULT_PIN_KDF_ITERATIONS,
+  PIN_MAX_LENGTH,
+  PIN_MIN_LENGTH
+} from "./pinPolicy.ts";
+import {
+  PUBLISH_POLICY_METADATA_FIELDS,
+  type PublishPolicyMetadataField
+} from "./publishPolicy.ts";
+
 export const PLUGIN_CATEGORIES = ["delivery", "template", "audit", "branding", "policy"] as const;
 
 export type PluginCategory = (typeof PLUGIN_CATEGORIES)[number];
@@ -26,11 +37,22 @@ export interface PluginTemplateContribution {
   description: string;
 }
 
+export interface PluginPolicyProfileContribution {
+  id: string;
+  label: string;
+  description: string;
+  minimumPinLength?: number;
+  minimumKdfIterations?: number;
+  requiredMetadata?: PublishPolicyMetadataField[];
+  requireWatermark?: boolean;
+}
+
 export interface PluginContributes {
   settingsPanel?: boolean;
   publishActions?: PluginActionContribution[];
   templates?: PluginTemplateContribution[];
   historyActions?: PluginActionContribution[];
+  policyProfiles?: PluginPolicyProfileContribution[];
 }
 
 type PluginContributionPoint = keyof PluginContributes;
@@ -39,7 +61,8 @@ export const PLUGIN_CONTRIBUTION_PERMISSION_REQUIREMENTS = {
   settingsPanel: ["ui:settings"],
   publishActions: ["ui:publish-action"],
   templates: [],
-  historyActions: ["history:read"]
+  historyActions: ["history:read"],
+  policyProfiles: []
 } as const satisfies Record<PluginContributionPoint, readonly PluginPermission[]>;
 
 export const PLUGIN_ID_PREFIXES_BY_CATEGORY = {
@@ -74,10 +97,16 @@ export interface ResolvedPluginTemplateContribution extends PluginTemplateContri
   pluginName: string;
 }
 
+export interface ResolvedPluginPolicyProfileContribution extends PluginPolicyProfileContribution {
+  pluginId: string;
+  pluginName: string;
+}
+
 export interface PluginContributions {
   publishActions: ResolvedPluginActionContribution[];
   templates: ResolvedPluginTemplateContribution[];
   historyActions: ResolvedPluginActionContribution[];
+  policyProfiles: ResolvedPluginPolicyProfileContribution[];
 }
 
 export const GMAIL_SMTP_PLUGIN_ID = "delivery.smtp.gmail";
@@ -86,11 +115,14 @@ export const GMAIL_SMTP_HISTORY_SEND_ACTION_ID = "send-email-from-history";
 export const GMAIL_SMTP_TEST_ACTION_ID = "test-smtp";
 export const AUDIT_INTEGRITY_PLUGIN_ID = "audit.integrity.report";
 export const AUDIT_INTEGRITY_HISTORY_ACTION_ID = "verify-package";
+export const STRICT_PIN_POLICY_PLUGIN_ID = "policy.strict-pin";
+export const STRICT_PIN_POLICY_PROFILE_ID = "strict-pin";
 
 export const EMPTY_PLUGIN_CONTRIBUTIONS: PluginContributions = {
   publishActions: [],
   templates: [],
-  historyActions: []
+  historyActions: [],
+  policyProfiles: []
 };
 
 export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
@@ -144,6 +176,28 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
         }
       ]
     }
+  },
+  {
+    id: STRICT_PIN_POLICY_PLUGIN_ID,
+    name: "엄격 발행 정책",
+    version: "0.1.0",
+    description:
+      "문서 발행 전 더 긴 PIN, 기본 PBKDF2 반복 횟수, 수신자/문서번호/만료일/워터마크 필수 입력을 적용합니다. 활성화하면 발행 다이얼로그에서 정책 위반 항목을 안내합니다.",
+    category: "policy",
+    permissions: [],
+    contributes: {
+      policyProfiles: [
+        {
+          id: STRICT_PIN_POLICY_PROFILE_ID,
+          label: "엄격 발행 정책",
+          description: "PIN 10자리 이상, PBKDF2 1,000,000회 이상, 수신자/문서번호/만료일/워터마크 입력을 요구합니다.",
+          minimumPinLength: 10,
+          minimumKdfIterations: DEFAULT_PIN_KDF_ITERATIONS,
+          requiredMetadata: ["recipientName", "documentNumber", "displayExpiresAt"],
+          requireWatermark: true
+        }
+      ]
+    }
   }
 ];
 
@@ -190,7 +244,7 @@ export function getPluginManifestContractViolations(manifest: PluginManifest): s
     }
   }
 
-  for (const point of ["publishActions", "historyActions", "templates"] as const) {
+  for (const point of ["publishActions", "historyActions", "templates", "policyProfiles"] as const) {
     const contributions = manifest.contributes[point] ?? [];
     for (const duplicateId of findDuplicateIds(contributions)) {
       violations.push(`${manifest.id}: duplicate ${point} id ${duplicateId}`);
@@ -199,6 +253,34 @@ export function getPluginManifestContractViolations(manifest: PluginManifest): s
     for (const contribution of contributions) {
       if (!idPattern.test(contribution.id)) {
         violations.push(`${manifest.id}: ${point} id ${contribution.id} must use lowercase dot/dash segments`);
+      }
+    }
+  }
+
+  const validMetadataFields = new Set<string>(PUBLISH_POLICY_METADATA_FIELDS);
+  for (const policyProfile of manifest.contributes.policyProfiles ?? []) {
+    if (
+      policyProfile.minimumPinLength !== undefined &&
+      (!Number.isInteger(policyProfile.minimumPinLength) ||
+        policyProfile.minimumPinLength < PIN_MIN_LENGTH ||
+        policyProfile.minimumPinLength > PIN_MAX_LENGTH)
+    ) {
+      violations.push(`${manifest.id}: policy profile ${policyProfile.id} minimumPinLength must be between ${PIN_MIN_LENGTH} and ${PIN_MAX_LENGTH}`);
+    }
+
+    if (
+      policyProfile.minimumKdfIterations !== undefined &&
+      (!Number.isInteger(policyProfile.minimumKdfIterations) ||
+        policyProfile.minimumKdfIterations < COMPAT_PIN_KDF_ITERATIONS)
+    ) {
+      violations.push(
+        `${manifest.id}: policy profile ${policyProfile.id} minimumKdfIterations must be at least ${COMPAT_PIN_KDF_ITERATIONS}`
+      );
+    }
+
+    for (const field of policyProfile.requiredMetadata ?? []) {
+      if (!validMetadataFields.has(field)) {
+        violations.push(`${manifest.id}: policy profile ${policyProfile.id} requiredMetadata field ${field} is not supported`);
       }
     }
   }
@@ -225,7 +307,8 @@ export function getEnabledPluginContributions(
   const contributions: PluginContributions = {
     publishActions: [],
     templates: [],
-    historyActions: []
+    historyActions: [],
+    policyProfiles: []
   };
 
   for (const manifest of manifests) {
@@ -257,6 +340,13 @@ export function getEnabledPluginContributions(
       });
     }
 
+    for (const policyProfile of manifest.contributes.policyProfiles ?? []) {
+      contributions.policyProfiles.push({
+        ...policyProfile,
+        pluginId: manifest.id,
+        pluginName: manifest.name
+      });
+    }
   }
 
   return contributions;

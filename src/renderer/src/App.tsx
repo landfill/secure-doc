@@ -17,6 +17,7 @@ import {
   GMAIL_SMTP_PLUGIN_ID,
   GMAIL_SMTP_SEND_ACTION_ID,
   GMAIL_SMTP_TEST_ACTION_ID,
+  STRICT_PIN_POLICY_PLUGIN_ID,
   type PluginCategory,
   type PluginContributions,
   type PluginDescriptor,
@@ -36,10 +37,16 @@ import {
   COMPAT_PIN_KDF_ITERATIONS,
   DEFAULT_PIN_KDF_ITERATIONS,
   evaluatePinPolicy,
+  GENERATED_PIN_LENGTH,
   generatePin,
   PIN_MAX_LENGTH,
   PIN_MIN_LENGTH
 } from "../../shared/pinPolicy";
+import {
+  PUBLISH_POLICY_METADATA_FIELD_LABELS,
+  evaluatePublishPolicy,
+  getEffectivePublishPolicy
+} from "../../shared/publishPolicy";
 import { issueSecureDocument, type SecureDocPlainContent } from "../../shared/securePackage";
 import { buildSecureHtmlDocument } from "../../shared/viewerHtml";
 import { isAllowedLinkHref, removeUnsupportedEditorCharacters, sanitizeHtml, stripHtml } from "./sanitizeHtml";
@@ -168,6 +175,9 @@ function pluginDisplayName(plugin: PluginDescriptor): string {
   if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
     return "패키지 무결성 감사";
   }
+  if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
+    return "엄격 발행 정책";
+  }
   return plugin.name;
 }
 
@@ -177,6 +187,9 @@ function pluginDisplayDescription(plugin: PluginDescriptor): string {
   }
   if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
     return "저장된 보안 HTML 파일이 발행 당시 기록된 SHA-256 해시와 일치하는지 검사합니다.";
+  }
+  if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
+    return "문서 발행 전 더 긴 PIN, 강한 KDF, 필수 메타데이터 입력을 요구합니다.";
   }
   return plugin.description;
 }
@@ -196,6 +209,13 @@ function pluginFeatureDescriptions(plugin: PluginDescriptor): string[] {
       "PIN, 평문 본문, 암호화 키를 리포트에 포함하지 않습니다."
     ];
   }
+  if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
+    return [
+      "발행 전 PIN 10자리 이상과 PBKDF2 1,000,000회 이상을 요구합니다.",
+      "수신자, 문서번호, 만료일, 워터마크 문구 누락을 발행 전에 차단합니다.",
+      "PIN, PIN hash, 평문 본문, 암호화 키를 저장하지 않는 선언형 정책입니다."
+    ];
+  }
 
   const descriptions: string[] = [];
   if (plugin.contributes.settingsPanel) {
@@ -209,6 +229,9 @@ function pluginFeatureDescriptions(plugin: PluginDescriptor): string[] {
   }
   for (const template of plugin.contributes.templates ?? []) {
     descriptions.push(`문서 작성에서: ${template.description}`);
+  }
+  for (const policyProfile of plugin.contributes.policyProfiles ?? []) {
+    descriptions.push(`발행 정책: ${policyProfile.description}`);
   }
   return descriptions;
 }
@@ -226,6 +249,9 @@ function pluginContributionLabels(plugin: PluginDescriptor): string[] {
   }
   if (plugin.contributes.historyActions?.length) {
     labels.push("이력 액션");
+  }
+  if (plugin.contributes.policyProfiles?.length) {
+    labels.push("정책 preset");
   }
   return labels;
 }
@@ -466,6 +492,23 @@ export function App(): ReactElement {
   const didMountScreenRef = useRef(false);
   const programmaticEditorUpdateRef = useRef(false);
 
+  const activePolicyProfiles = pluginContributions.policyProfiles;
+  const effectivePublishPolicy = useMemo(() => getEffectivePublishPolicy(activePolicyProfiles), [activePolicyProfiles]);
+  const publishPolicyRequirementItems = useMemo(() => {
+    const items = [
+      `PIN ${effectivePublishPolicy.minimumPinLength}-${PIN_MAX_LENGTH}자리`,
+      `PBKDF2 ${effectivePublishPolicy.minimumKdfIterations.toLocaleString()}회 이상`
+    ];
+    if (effectivePublishPolicy.requiredMetadata.length > 0) {
+      items.push(
+        `필수 정보: ${effectivePublishPolicy.requiredMetadata.map((field) => PUBLISH_POLICY_METADATA_FIELD_LABELS[field]).join(", ")}`
+      );
+    }
+    if (effectivePublishPolicy.requireWatermark) {
+      items.push("워터마크 문구 필수");
+    }
+    return items;
+  }, [effectivePublishPolicy]);
   const selectedTemplate = useMemo(
     () => getDocumentTemplateById(selectedTemplateId) ?? defaultDocumentTemplate,
     [selectedTemplateId]
@@ -474,9 +517,24 @@ export function App(): ReactElement {
     () => getDocumentTemplateById(activeTemplateId) ?? defaultDocumentTemplate,
     [activeTemplateId]
   );
-  const pinResult = useMemo(() => evaluatePinPolicy(pin), [pin]);
+  const pinResult = useMemo(
+    () => evaluatePinPolicy(pin, { minLength: effectivePublishPolicy.minimumPinLength }),
+    [effectivePublishPolicy.minimumPinLength, pin]
+  );
   const sanitizedPreview = useMemo(() => sanitizeHtml(editorHtml), [editorHtml]);
   const contentText = useMemo(() => stripHtml(sanitizedPreview), [sanitizedPreview]);
+  const publishPolicyResult = useMemo(
+    () =>
+      evaluatePublishPolicy({
+        metadata,
+        pin,
+        pinConfirm,
+        iterations,
+        contentText,
+        policyProfiles: activePolicyProfiles
+      }),
+    [activePolicyProfiles, contentText, iterations, metadata, pin, pinConfirm]
+  );
   const smtpSendActionEnabled = hasActiveSmtpSendAction(pluginContributions);
   const smtpPluginEnabled = isSmtpPluginEnabled(plugins);
   const smtpHistorySendActionEnabled = hasActiveSmtpHistorySendAction(pluginContributions);
@@ -536,7 +594,7 @@ export function App(): ReactElement {
   async function handlePluginToggle(plugin: PluginDescriptor, enabled: boolean): Promise<void> {
     const pluginApi = window.secureDoc?.plugins;
     if (!pluginApi) {
-      setError("Electron plugin bridge is not available.");
+      setError("플러그인 브리지를 사용할 수 없습니다.");
       return;
     }
 
@@ -789,7 +847,8 @@ export function App(): ReactElement {
   }
 
   function handleGeneratePin(): void {
-    const nextPin = generatePin();
+    const nextPinLength = Math.max(GENERATED_PIN_LENGTH, effectivePublishPolicy.minimumPinLength);
+    const nextPin = generatePin(undefined, nextPinLength);
     setPin(nextPin);
     setPinConfirm(nextPin);
     setStatus("새 PIN이 생성되었습니다. 표시 버튼으로 확인하거나 복사할 수 있습니다.");
@@ -817,7 +876,7 @@ export function App(): ReactElement {
   async function saveSmtpSettingsFromForm(): Promise<SmtpSettingsView> {
     const pluginApi = window.secureDoc?.plugins;
     if (!pluginApi) {
-      throw new Error("Electron plugin bridge is not available.");
+      throw new Error("플러그인 브리지를 사용할 수 없습니다.");
     }
 
     const request: SaveSmtpSettingsRequest = {
@@ -852,7 +911,7 @@ export function App(): ReactElement {
   async function handleClearSmtpSettings(): Promise<void> {
     const pluginApi = window.secureDoc?.plugins;
     if (!pluginApi) {
-      setSmtpError("Electron plugin bridge is not available.");
+      setSmtpError("플러그인 브리지를 사용할 수 없습니다.");
       return;
     }
 
@@ -874,7 +933,7 @@ export function App(): ReactElement {
   async function handleTestSmtpSettings(): Promise<void> {
     const pluginApi = window.secureDoc?.plugins;
     if (!pluginApi) {
-      setSmtpError("Electron plugin bridge is not available.");
+      setSmtpError("플러그인 브리지를 사용할 수 없습니다.");
       return;
     }
 
@@ -967,7 +1026,7 @@ export function App(): ReactElement {
   async function handleSendEmail(): Promise<void> {
     const pluginApi = window.secureDoc?.plugins;
     if (!pluginApi || !pendingEmailPackage) {
-      setError("Email delivery is not available.");
+      setError("이메일 발송을 사용할 수 없습니다.");
       return;
     }
 
@@ -1043,24 +1102,12 @@ export function App(): ReactElement {
 
     try {
       if (!window.secureDoc) {
-        throw new Error("Electron desktop bridge is not available.");
+        throw new Error("데스크톱 브리지를 사용할 수 없습니다.");
       }
       const publishMetadata = metadata;
 
-      if (!publishMetadata.title.trim()) {
-        throw new Error("문서 제목을 입력하세요.");
-      }
-      if (!publishMetadata.issuer.trim()) {
-        throw new Error("발행자를 입력하세요.");
-      }
-      if (!pinResult.valid) {
-        throw new Error(pinResult.message);
-      }
-      if (pinResult.normalizedPin !== pinConfirm.normalize("NFKC").trim()) {
-        throw new Error("PIN 확인 입력이 일치하지 않습니다.");
-      }
-      if (!contentText) {
-        throw new Error("암호화할 본문을 입력하세요.");
+      if (!publishPolicyResult.valid) {
+        throw new Error(publishPolicyResult.messages[0]);
       }
 
       const issuedAt = new Date().toISOString();
@@ -1757,6 +1804,11 @@ export function App(): ReactElement {
               활성 발행 액션: {pluginContributions.publishActions.map((action) => action.label).join(", ")}
             </div>
           )}
+          {pluginContributions.policyProfiles.length > 0 && (
+            <div className="plugin-contribution-summary">
+              활성 발행 정책: {pluginContributions.policyProfiles.map((profile) => profile.label).join(", ")}
+            </div>
+          )}
         </section>
         )}
         </div>
@@ -1781,6 +1833,18 @@ export function App(): ReactElement {
             <p className="security-note publish-note">
               6자리 이상 15자리 이내 PIN은 문자와 기호를 함께 사용할 수 있는 편의형 암호입니다. 자동 생성 후 표시 버튼으로 확인하거나 복사할 수 있습니다.
             </p>
+            <div className="publish-policy-summary">
+              <strong>
+                {activePolicyProfiles.length > 0
+                  ? `활성 정책: ${activePolicyProfiles.map((profile) => profile.label).join(", ")}`
+                  : "기본 발행 정책"}
+              </strong>
+              <ul>
+                {publishPolicyRequirementItems.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
             <div className="publish-dialog-grid">
               <label className="field-pin">
                 문서 열람 PIN
@@ -1826,6 +1890,13 @@ export function App(): ReactElement {
               </button>
             </div>
             <div className={pinResult.valid ? "policy ok" : "policy"}>{pin ? pinResult.message : "PIN 정책 검사 대기 중"}</div>
+            {activePolicyProfiles.length > 0 && publishPolicyResult.messages.length > 0 && (pin || pinConfirm) && (
+              <ul className="publish-policy-errors">
+                {publishPolicyResult.messages.map((message) => (
+                  <li key={message}>{message}</li>
+                ))}
+              </ul>
+            )}
             {status && <div className="status">{status}</div>}
             {error && <div className="error">{error}</div>}
           </section>

@@ -65,6 +65,7 @@ Required contribution permissions:
 - `publishActions` requires `ui:publish-action`.
 - `historyActions` requires `history:read`.
 - `templates` requires no special permission by default because templates must be static data with no network or secret access.
+- `policyProfiles` requires no special permission by default because policy profiles are declarative publish-time validation presets.
 
 Feature-specific permissions still apply. For example, an SMTP delivery plugin also needs `network:smtp`, `secret:safeStorage`, `package:read`, and usually `history:read`.
 
@@ -76,6 +77,7 @@ type PluginContributes = {
   publishActions?: PluginActionContribution[];
   templates?: PluginTemplateContribution[];
   historyActions?: PluginActionContribution[];
+  policyProfiles?: PluginPolicyProfileContribution[];
 };
 ```
 
@@ -96,6 +98,12 @@ Declares actions available from publish history. The main process must resolve t
 ### `templates`
 
 Declares static templates or template ids. Core templates are implemented in `src/shared/documentTemplates.ts`, and future template packs should use the same static-data or safe-builder shape. Template content must be sanitized before injection into the editor and must not contain real sensitive examples, PINs, PIN hashes, keys, executable markup, or remote resources.
+
+### `policyProfiles`
+
+Declares publish-time validation presets. Policy profiles can require a longer PIN, a minimum PBKDF2 iteration count, required metadata fields, or a watermark. A profile must not weaken the base security floor: `minimumPinLength` cannot be below the core PIN minimum, `minimumKdfIterations` cannot be below the compatibility KDF floor, and required metadata fields must come from the reviewed allowlist.
+
+The renderer applies enabled policy profiles before issuing a package. Policy failures must be specific enough for the operator to fix the form, but must not include PINs, PIN hashes, plaintext bodies, DEKs, or KEKs.
 
 ## IPC Contract
 
@@ -135,5 +143,7 @@ The registry contract tests must fail when:
 - A contribution lacks its required permission.
 - A plugin duplicates contribution ids within one contribution point.
 - A contribution id uses uppercase, whitespace, or unsupported characters.
+- A policy profile tries to lower the PIN or KDF floor.
+- A policy profile references unsupported metadata fields.
 
 Security tests must continue to reject browser storage, weak random generation, numeric PIN inputs, raw secret persistence, and viewer/network policy regressions.

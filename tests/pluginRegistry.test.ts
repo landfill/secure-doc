@@ -6,6 +6,7 @@ import {
   PLUGIN_CONTRIBUTION_PERMISSION_REQUIREMENTS,
   PLUGIN_ID_PREFIXES_BY_CATEGORY,
   PLUGIN_PERMISSIONS,
+  STRICT_PIN_POLICY_PLUGIN_ID,
   buildPluginDescriptors,
   getEnabledPluginContributions,
   getPluginManifestContractViolations,
@@ -27,7 +28,8 @@ test("plugin category, permission, and contribution contracts are explicit", () 
     settingsPanel: ["ui:settings"],
     publishActions: ["ui:publish-action"],
     templates: [],
-    historyActions: ["history:read"]
+    historyActions: ["history:read"],
+    policyProfiles: []
   });
   assert.deepEqual(PLUGIN_ID_PREFIXES_BY_CATEGORY, {
     delivery: ["delivery."],
@@ -64,6 +66,14 @@ test("built-in plugin manifests expose stable ids, permissions, and extension po
   assert.equal(auditPlugin.category, "audit");
   assert.deepEqual(auditPlugin.permissions, ["history:read", "package:read"]);
   assert.equal(auditPlugin.contributes.historyActions?.[0]?.id, "verify-package");
+
+  const policyPlugin = BUILT_IN_PLUGIN_MANIFESTS.find((plugin) => plugin.id === STRICT_PIN_POLICY_PLUGIN_ID);
+  assert.ok(policyPlugin);
+  assert.equal(policyPlugin.category, "policy");
+  assert.deepEqual(policyPlugin.permissions, []);
+  assert.equal(policyPlugin.contributes.policyProfiles?.[0]?.id, "strict-pin");
+  assert.equal(policyPlugin.contributes.policyProfiles?.[0]?.minimumPinLength, 10);
+  assert.equal(policyPlugin.contributes.policyProfiles?.[0]?.minimumKdfIterations, 1_000_000);
 });
 
 test("plugin manifest contract catches permission and naming drift", () => {
@@ -130,6 +140,61 @@ test("template pack manifests can contribute static templates without network or
   assert.deepEqual(getPluginManifestContractViolations(templatePackManifest), []);
 });
 
+test("policy manifests can contribute stricter publish profiles without permissions", () => {
+  const policyManifest: PluginManifest = {
+    id: "policy.required-metadata",
+    name: "Required Metadata Policy",
+    version: "0.1.0",
+    description: "Requires extra metadata before publish.",
+    category: "policy",
+    permissions: [],
+    contributes: {
+      policyProfiles: [
+        {
+          id: "required-metadata",
+          label: "Required metadata",
+          description: "Requires recipient and document number.",
+          minimumPinLength: 8,
+          minimumKdfIterations: 600_000,
+          requiredMetadata: ["recipientName", "documentNumber"],
+          requireWatermark: true
+        }
+      ]
+    }
+  };
+
+  assert.deepEqual(getPluginManifestContractViolations(policyManifest), []);
+});
+
+test("policy manifest contract blocks weaker or unsupported profile requirements", () => {
+  const weakPolicyManifest: PluginManifest = {
+    id: "policy.weak",
+    name: "Weak Policy",
+    version: "0.1.0",
+    description: "Intentionally weak policy profile for regression coverage.",
+    category: "policy",
+    permissions: [],
+    contributes: {
+      policyProfiles: [
+        {
+          id: "weak-policy",
+          label: "Weak policy",
+          description: "Invalid weak requirements.",
+          minimumPinLength: 4,
+          minimumKdfIterations: 100_000,
+          requiredMetadata: ["issuer" as "recipientName"]
+        }
+      ]
+    }
+  };
+
+  assert.deepEqual(getPluginManifestContractViolations(weakPolicyManifest), [
+    "policy.weak: policy profile weak-policy minimumPinLength must be between 6 and 15",
+    "policy.weak: policy profile weak-policy minimumKdfIterations must be at least 600000",
+    "policy.weak: policy profile weak-policy requiredMetadata field issuer is not supported"
+  ]);
+});
+
 test("plugin descriptors and contributions are driven only by enabled state", () => {
   const disabledDescriptors = buildPluginDescriptors([]);
   assert.equal(disabledDescriptors.every((plugin) => !plugin.enabled), true);
@@ -144,10 +209,17 @@ test("plugin descriptors and contributions are driven only by enabled state", ()
   assert.equal(contributions.templates.length, 0);
   assert.equal(contributions.historyActions.length, 1);
   assert.equal(contributions.historyActions[0].pluginId, "delivery.smtp.gmail");
+  assert.equal(contributions.policyProfiles.length, 0);
 
   const auditContributions = getEnabledPluginContributions(["audit.integrity.report"]);
   assert.equal(auditContributions.publishActions.length, 0);
   assert.equal(auditContributions.historyActions.length, 1);
   assert.equal(auditContributions.historyActions[0].pluginId, "audit.integrity.report");
   assert.equal(auditContributions.historyActions[0].id, "verify-package");
+
+  const policyContributions = getEnabledPluginContributions([STRICT_PIN_POLICY_PLUGIN_ID]);
+  assert.equal(policyContributions.publishActions.length, 0);
+  assert.equal(policyContributions.policyProfiles.length, 1);
+  assert.equal(policyContributions.policyProfiles[0].pluginId, STRICT_PIN_POLICY_PLUGIN_ID);
+  assert.equal(policyContributions.policyProfiles[0].minimumPinLength, 10);
 });

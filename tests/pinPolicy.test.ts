@@ -17,6 +17,15 @@ test("accepts PINs from six to fifteen characters with letters, numbers, and sym
   }
 });
 
+test("supports stricter minimum PIN lengths for publish policy profiles", () => {
+  const shortResult = evaluatePinPolicy("Abc123!", { minLength: 10 });
+  assert.equal(shortResult.valid, false);
+  assert.equal(shortResult.message, "PIN은 숫자, 문자, 기호를 포함해 10자리 이상 15자리 이내여야 합니다.");
+
+  const strictResult = evaluatePinPolicy("Abc123!890", { minLength: 10 });
+  assert.equal(strictResult.valid, true);
+});
+
 test("rejects PINs outside the length range or with control characters", () => {
   for (const pin of ["12345", "1234567890123456", "abc12\n345"]) {
     const result = evaluatePinPolicy(pin);
