@@ -17,6 +17,7 @@ test("built-in plugin manifests expose stable ids, permissions, and extension po
     "network:smtp",
     "secret:safeStorage",
     "package:read",
+    "history:read",
     "ui:settings",
     "ui:publish-action"
   ]);

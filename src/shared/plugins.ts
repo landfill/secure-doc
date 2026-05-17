@@ -76,7 +76,14 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
     version: "0.1.0",
     description: "Sends the issued secure HTML package through Gmail SMTP after explicit activation.",
     category: "delivery",
-    permissions: ["network:smtp", "secret:safeStorage", "package:read", "ui:settings", "ui:publish-action"],
+    permissions: [
+      "network:smtp",
+      "secret:safeStorage",
+      "package:read",
+      "history:read",
+      "ui:settings",
+      "ui:publish-action"
+    ],
     contributes: {
       settingsPanel: true,
       publishActions: [
