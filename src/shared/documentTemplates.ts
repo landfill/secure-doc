@@ -26,8 +26,6 @@ export interface DocumentTemplate {
 
 export const DEFAULT_DOCUMENT_TEMPLATE_ID = "core.notice";
 
-const UNSUPPORTED_TEMPLATE_TEXT_CHARACTERS = /[\p{Script=Han}\uF900-\uFAFF]/gu;
-
 function escapeTemplateValue(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -38,9 +36,7 @@ function escapeTemplateValue(value: string): string {
 }
 
 function templateText(value: string, fallback: string): string {
-  return escapeTemplateValue(
-    (value || fallback).normalize("NFKC").replace(UNSUPPORTED_TEMPLATE_TEXT_CHARACTERS, "").trim() || fallback
-  );
+  return escapeTemplateValue((value || fallback).normalize("NFKC").trim() || fallback);
 }
 
 export const CORE_DOCUMENT_TEMPLATES: readonly DocumentTemplate[] = [

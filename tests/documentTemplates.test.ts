@@ -51,7 +51,7 @@ test("template defaults update metadata without dropping operator fields", () =>
   assert.equal(nextMetadata.issuer, "발행팀");
 });
 
-test("template body builders escape metadata and avoid unsafe external content", () => {
+test("template body builders escape metadata, preserve user text, and avoid unsafe external content", () => {
   const template = getDocumentTemplateById("core.contract");
   assert.ok(template);
 
@@ -64,7 +64,7 @@ test("template body builders escape metadata and avoid unsafe external content",
 
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.match(html, /&lt;b&gt;을&lt;\/b&gt;/);
-  assert.equal(html.includes("忍"), false);
+  assert.match(html, /갑忍/);
   assert.doesNotMatch(html, /<script|<iframe|<img|https?:\/\//i);
 });
 
@@ -76,4 +76,21 @@ test("core templates do not carry stored secrets or real sensitive examples", ()
   const serialized = `${serializedDefaults}\n${renderedTemplates}`;
 
   assert.doesNotMatch(serialized, /pin hash|pinhash|DEK|KEK|private key|BEGIN [A-Z ]+ KEY/i);
+});
+
+test("core template copy stays Hanja-free without stripping user metadata", () => {
+  const renderedWithDefaults = CORE_DOCUMENT_TEMPLATES.map((template) =>
+    buildDocumentTemplateBodyHtml(template, applyDocumentTemplateDefaults(baseMetadata, template))
+  ).join("\n");
+  assert.doesNotMatch(renderedWithDefaults, /[\p{Script=Han}\uF900-\uFAFF]/u);
+
+  const notice = getDocumentTemplateById("core.notice");
+  assert.ok(notice);
+  const personalizedHtml = buildDocumentTemplateBodyHtml(notice, {
+    ...baseMetadata,
+    recipientName: "金수신자",
+    issuer: "發행팀"
+  });
+  assert.match(personalizedHtml, /金수신자/);
+  assert.match(personalizedHtml, /發행팀/);
 });
