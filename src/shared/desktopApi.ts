@@ -1,3 +1,5 @@
+import type { PluginContributions, PluginDescriptor } from "./plugins";
+
 export interface PublishHistoryRecord {
   documentId: string;
   title: string;
@@ -25,9 +27,16 @@ export interface SavePackageResult {
   packageSha256?: string;
 }
 
+export interface SecureDocPluginApi {
+  list(): Promise<PluginDescriptor[]>;
+  setEnabled(pluginId: string, enabled: boolean): Promise<PluginDescriptor[]>;
+  getContributions(): Promise<PluginContributions>;
+}
+
 export interface SecureDocDesktopApi {
   savePackage(request: SavePackageRequest): Promise<SavePackageResult>;
   getHistory(): Promise<PublishHistoryRecord[]>;
   showItemInFolder(filePath: string): Promise<void>;
+  plugins: SecureDocPluginApi;
 }
 

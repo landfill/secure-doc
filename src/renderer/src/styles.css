@@ -97,20 +97,29 @@ button.primary {
   gap: 2px;
 }
 
-.nav a {
+.nav button {
+  width: 100%;
+  height: auto;
+  border: 0;
   border-radius: 6px;
   padding: 7px 10px;
   color: var(--fg);
+  background: transparent;
+  text-align: left;
   text-decoration: none;
 }
 
-.nav a.active,
-.nav a:hover {
+.nav button.active,
+.nav button:hover {
   background: var(--bg);
 }
 
-.nav a.active {
+.nav button.active {
   font-weight: 700;
+}
+
+.nav button:focus-visible {
+  outline: 3px solid var(--accent-focus);
 }
 
 .nav .group-label {
@@ -120,6 +129,12 @@ button.primary {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.nav-note {
+  padding: 5px 10px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .main-column {
@@ -176,6 +191,10 @@ button.primary {
   gap: 16px;
 }
 
+.workspace:focus {
+  outline: none;
+}
+
 .panel {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -184,8 +203,15 @@ button.primary {
 
 .metadata-panel,
 .editor-panel,
-.history-panel {
+.security-panel,
+.history-panel,
+.plugins-panel {
   grid-column: 1;
+}
+
+.panel:focus {
+  outline: 3px solid var(--accent-focus);
+  outline-offset: 2px;
 }
 
 .section-heading {
@@ -798,6 +824,142 @@ select:focus,
   font-size: 12px;
 }
 
+.security-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+
+.security-policy-item {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface-warm);
+}
+
+.security-policy-item strong {
+  font-size: 13px;
+}
+
+.security-policy-item span {
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.plugin-list {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.plugin-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.plugin-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--surface-warm);
+}
+
+.plugin-item-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.plugin-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.plugin-title-row h3 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.plugin-category,
+.plugin-chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.plugin-item p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.plugin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.plugin-toggle {
+  display: inline-flex;
+  align-items: center;
+  grid-template-columns: none;
+  gap: 8px;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.plugin-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.plugin-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.plugin-chip.contribution {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.plugin-chip.muted {
+  font-weight: 600;
+}
+
+.plugin-contribution-summary {
+  margin: 0 14px 14px;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--warm-fg);
+  background: var(--accent-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .hash {
   max-width: 260px;
   overflow-wrap: anywhere;
@@ -838,12 +1000,15 @@ select:focus,
 
   .metadata-panel,
   .editor-panel,
-  .history-panel {
+  .security-panel,
+  .history-panel,
+  .plugins-panel {
     grid-column: 1;
     grid-row: auto;
   }
 
   .metadata-panel .form-grid,
+  .security-policy-grid,
   .publish-dialog-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -863,6 +1028,7 @@ select:focus,
 
 @media (max-width: 720px) {
   .metadata-panel .form-grid,
+  .security-policy-grid,
   .publish-dialog-grid {
     grid-template-columns: 1fr;
   }
@@ -876,5 +1042,9 @@ select:focus,
       "number"
       "date"
       "watermark";
+  }
+
+  .plugin-item-main {
+    grid-template-columns: 1fr;
   }
 }

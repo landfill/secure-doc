@@ -3,10 +3,13 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { createHistoryStore } from "./history";
+import { createPluginStore } from "./pluginStore";
 import type { PublishHistoryRecord, SavePackageRequest, SavePackageResult } from "../shared/desktopApi";
+import type { PluginContributions, PluginDescriptor } from "../shared/plugins";
 
 let mainWindow: BrowserWindow | null = null;
 const historyStorePromise = app.whenReady().then(() => createHistoryStore(app.getPath("userData")));
+const pluginStorePromise = app.whenReady().then(() => createPluginStore(app.getPath("userData")));
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -94,6 +97,28 @@ ipcMain.handle("secure-doc:get-history", async (): Promise<PublishHistoryRecord[
 ipcMain.handle("secure-doc:show-item-in-folder", async (_event, filePath: string): Promise<void> => {
   shell.showItemInFolder(filePath);
 });
+
+ipcMain.handle("secure-doc:plugins:list", async (): Promise<PluginDescriptor[]> => {
+  const pluginStore = await pluginStorePromise;
+  return pluginStore.list();
+});
+
+ipcMain.handle("secure-doc:plugins:get-contributions", async (): Promise<PluginContributions> => {
+  const pluginStore = await pluginStorePromise;
+  return pluginStore.getContributions();
+});
+
+ipcMain.handle(
+  "secure-doc:plugins:set-enabled",
+  async (_event, pluginId: string, enabled: boolean): Promise<PluginDescriptor[]> => {
+    if (typeof pluginId !== "string" || typeof enabled !== "boolean") {
+      throw new Error("Invalid plugin toggle request.");
+    }
+
+    const pluginStore = await pluginStorePromise;
+    return pluginStore.setEnabled(pluginId, enabled);
+  }
+);
 
 app.whenReady().then(() => {
   createWindow();
