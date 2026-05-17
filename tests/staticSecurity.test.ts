@@ -33,4 +33,5 @@ test("source does not use weak random, browser storage, numeric PIN input type, 
   assert.equal(combined.includes("../preload/preload.mjs"), true);
   assert.equal(combined.includes("encryptedAppPassword: request.appPassword"), false);
   assert.equal(combined.includes("encryptedAppPassword: appPassword"), false);
+  assert.equal(combined.includes("abcd efgh ijkl mnop"), false);
 });

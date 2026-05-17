@@ -43,7 +43,7 @@ Plugin ids must use lowercase dot/dash segments and match the category prefix:
 - `branding.*`
 - `policy.*`
 
-Examples: `delivery.smtp.gmail`, `template-pack.legal`, `audit.export.csv`, `branding.company-defaults`, `policy.strict-pin`.
+Examples: `delivery.smtp.gmail`, `delivery.smtp.generic`, `template-pack.legal`, `audit.export.csv`, `branding.company-defaults`, `policy.strict-pin`.
 
 ## Permissions
 
@@ -69,6 +69,15 @@ Required contribution permissions:
 
 Feature-specific permissions still apply. For example, an SMTP delivery plugin also needs `network:smtp`, `secret:safeStorage`, `package:read`, and usually `history:read`.
 
+## Built-In Delivery Channels
+
+Current delivery plugins share the same package identity payload and main-process verification path:
+
+- `delivery.smtp.gmail`: Gmail SMTP with fixed STARTTLS port 587 and a Google app password.
+- `delivery.smtp.generic`: configurable SMTP host, port, STARTTLS mode, sender address, username, and password for internal mail servers.
+
+Both channels store credentials through Electron `safeStorage`, return only secret-presence flags to the renderer, and mask transport errors before crossing IPC.
+
 ## Contributions
 
 ```ts
@@ -90,6 +99,18 @@ Declares that the plugin has a renderer settings panel. The renderer can show fi
 ### `publishActions`
 
 Declares actions shown after a secure HTML package has been issued. The action payload must refer to the saved package and publish metadata; the renderer must not send plaintext document bodies, PINs, PIN hashes, DEKs, or KEKs.
+
+Delivery publish and history actions use this common package reference shape:
+
+```ts
+type DeliveryPackagePayload = {
+  documentId: string;
+  outputPath: string;
+  attachmentFileName: string;
+};
+```
+
+The renderer may add channel-specific fields such as recipient email and subject, but it must not include the HTML attachment content. The main process resolves `documentId` and `outputPath` against publish history, reads the saved HTML from disk, and verifies the content against `packageSha256` before invoking the delivery transport.
 
 ### `historyActions`
 

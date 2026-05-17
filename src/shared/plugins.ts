@@ -113,6 +113,12 @@ export const GMAIL_SMTP_PLUGIN_ID = "delivery.smtp.gmail";
 export const GMAIL_SMTP_SEND_ACTION_ID = "send-email";
 export const GMAIL_SMTP_HISTORY_SEND_ACTION_ID = "send-email-from-history";
 export const GMAIL_SMTP_TEST_ACTION_ID = "test-smtp";
+export const GENERIC_SMTP_PLUGIN_ID = "delivery.smtp.generic";
+export const GENERIC_SMTP_SEND_ACTION_ID = "send-email";
+export const GENERIC_SMTP_HISTORY_SEND_ACTION_ID = "send-email-from-history";
+export const GENERIC_SMTP_TEST_ACTION_ID = "test-smtp";
+export const SMTP_DELIVERY_PLUGIN_IDS = [GMAIL_SMTP_PLUGIN_ID, GENERIC_SMTP_PLUGIN_ID] as const;
+export type SmtpDeliveryPluginId = (typeof SMTP_DELIVERY_PLUGIN_IDS)[number];
 export const AUDIT_INTEGRITY_PLUGIN_ID = "audit.integrity.report";
 export const AUDIT_INTEGRITY_HISTORY_ACTION_ID = "verify-package";
 export const STRICT_PIN_POLICY_PLUGIN_ID = "policy.strict-pin";
@@ -124,6 +130,10 @@ export const EMPTY_PLUGIN_CONTRIBUTIONS: PluginContributions = {
   historyActions: [],
   policyProfiles: []
 };
+
+export function isSmtpDeliveryPluginId(pluginId: string): pluginId is SmtpDeliveryPluginId {
+  return (SMTP_DELIVERY_PLUGIN_IDS as readonly string[]).includes(pluginId);
+}
 
 export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
   {
@@ -155,6 +165,39 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
           id: GMAIL_SMTP_HISTORY_SEND_ACTION_ID,
           label: "이메일 발송",
           description: "이미 발행 이력에 저장된 보안 HTML 파일을 다시 이메일로 첨부 발송합니다."
+        }
+      ]
+    }
+  },
+  {
+    id: GENERIC_SMTP_PLUGIN_ID,
+    name: "Generic SMTP Delivery",
+    version: "0.1.0",
+    description:
+      "Sends issued secure HTML packages through a configured SMTP server after publish-history and package hash verification.",
+    category: "delivery",
+    permissions: [
+      "network:smtp",
+      "secret:safeStorage",
+      "package:read",
+      "history:read",
+      "ui:settings",
+      "ui:publish-action"
+    ],
+    contributes: {
+      settingsPanel: true,
+      publishActions: [
+        {
+          id: GENERIC_SMTP_SEND_ACTION_ID,
+          label: "Send via SMTP",
+          description: "Send the just-issued secure HTML package through the configured SMTP server."
+        }
+      ],
+      historyActions: [
+        {
+          id: GENERIC_SMTP_HISTORY_SEND_ACTION_ID,
+          label: "Send via SMTP",
+          description: "Re-send the saved secure HTML package from publish history through the configured SMTP server."
         }
       ]
     }

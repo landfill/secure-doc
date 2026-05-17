@@ -2,42 +2,36 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
 import { createAuditPluginService } from "./auditPlugin";
+import { createVerifiedHistoryPackageReader } from "./deliveryPlugin";
 import { createHistoryStore } from "./history";
-import { assertPackageContentMatchesHash, sha256Base64Url } from "./packageIntegrity";
+import { sha256Base64Url } from "./packageIntegrity";
 import { createPluginStore } from "./pluginStore";
-import { createGmailSmtpPluginService } from "./smtpPlugin";
+import { createSmtpDeliveryPluginService } from "./smtpPlugin";
 import type { PublishHistoryRecord, SavePackageRequest, SavePackageResult } from "../shared/desktopApi";
-import { AUDIT_INTEGRITY_PLUGIN_ID, GMAIL_SMTP_PLUGIN_ID, type PluginContributions, type PluginDescriptor } from "../shared/plugins";
+import { AUDIT_INTEGRITY_PLUGIN_ID, isSmtpDeliveryPluginId, type PluginContributions, type PluginDescriptor } from "../shared/plugins";
 
 let mainWindow: BrowserWindow | null = null;
 const historyStorePromise = app.whenReady().then(() => createHistoryStore(app.getPath("userData")));
 const pluginStorePromise = app.whenReady().then(() => createPluginStore(app.getPath("userData")));
 const smtpPluginServicePromise = app.whenReady().then(() =>
-  createGmailSmtpPluginService({
+  createSmtpDeliveryPluginService({
     userDataPath: app.getPath("userData"),
     secretCodec: safeStorage,
     async isPluginEnabled(pluginId) {
       const pluginStore = await pluginStorePromise;
       return (await pluginStore.list()).some((plugin) => plugin.id === pluginId && plugin.enabled);
     },
-    async readHistoryAttachment(request) {
-      const historyStore = await historyStorePromise;
-      const historyRecord = (await historyStore.list()).find(
-        (record) => record.documentId === request.documentId && record.outputPath === request.outputPath
-      );
-      if (!historyRecord) {
-        throw new Error("Selected publish history item is not available for email delivery.");
-      }
-
-      let attachmentHtml: string;
-      try {
-        attachmentHtml = await readFile(historyRecord.outputPath, "utf8");
-      } catch {
-        throw new Error("Saved secure HTML file is no longer available. Recreate the package before sending email.");
-      }
-      assertPackageContentMatchesHash(attachmentHtml, historyRecord.packageSha256);
-      return attachmentHtml;
-    }
+    readHistoryAttachment: createVerifiedHistoryPackageReader({
+      async listHistory() {
+        const historyStore = await historyStorePromise;
+        return historyStore.list();
+      },
+      async readPackageFile(outputPath) {
+        return readFile(outputPath, "utf8");
+      },
+      unavailableMessage: "Selected publish history item is not available for delivery.",
+      missingFileMessage: "Saved secure HTML file is no longer available. Recreate the package before delivery."
+    })
   })
 );
 const auditPluginServicePromise = app.whenReady().then(() =>
@@ -190,7 +184,7 @@ ipcMain.handle("secure-doc:plugins:run-action", async (_event, pluginId: string,
     throw new Error("Invalid plugin action request.");
   }
 
-  if (pluginId === GMAIL_SMTP_PLUGIN_ID) {
+  if (isSmtpDeliveryPluginId(pluginId)) {
     const smtpPluginService = await smtpPluginServicePromise;
     return smtpPluginService.runAction(pluginId, actionId, payload);
   }
