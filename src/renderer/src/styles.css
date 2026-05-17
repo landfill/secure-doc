@@ -302,7 +302,8 @@ label.wide {
   grid-area: watermark;
 }
 
-.template-picker {
+.template-picker,
+.branding-picker {
   display: grid;
   grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.8fr) auto;
   align-items: end;
@@ -310,7 +311,12 @@ label.wide {
   padding: 0 14px 14px;
 }
 
-.template-summary {
+.branding-picker {
+  padding-top: 0;
+}
+
+.template-summary,
+.branding-summary {
   display: grid;
   gap: 4px;
   min-height: 38px;
@@ -320,20 +326,37 @@ label.wide {
   background: var(--surface-warm);
 }
 
-.template-summary strong {
+.template-summary strong,
+.branding-summary strong {
   color: var(--fg);
   font-size: 12px;
   font-weight: 700;
 }
 
-.template-summary span {
+.template-summary span,
+.branding-summary span {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
 }
 
-.template-apply-button {
+.template-apply-button,
+.branding-apply-button {
   white-space: nowrap;
+}
+
+.branding-swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 3px;
+}
+
+.branding-swatch {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-control);
+  border-radius: 4px;
 }
 
 .admin-meta-details {
@@ -790,7 +813,8 @@ select:focus,
   margin: 14px 16px 0;
 }
 
-.publish-policy-summary {
+.publish-policy-summary,
+.publish-branding-summary {
   display: grid;
   gap: 8px;
   margin: 12px 16px 0;
@@ -800,8 +824,15 @@ select:focus,
   background: var(--surface-warm);
 }
 
-.publish-policy-summary strong {
+.publish-policy-summary strong,
+.publish-branding-summary strong {
   font-size: 13px;
+}
+
+.publish-branding-summary span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .publish-policy-summary ul,
@@ -1490,11 +1521,13 @@ select:focus,
     grid-template-columns: 1fr;
   }
 
-  .template-picker {
+  .template-picker,
+  .branding-picker {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
   }
 
-  .template-apply-button {
+  .template-apply-button,
+  .branding-apply-button {
     grid-column: 1 / -1;
     justify-self: start;
   }
@@ -1531,11 +1564,13 @@ select:focus,
     grid-template-columns: 1fr;
   }
 
-  .template-picker {
+  .template-picker,
+  .branding-picker {
     grid-template-columns: 1fr;
   }
 
-  .template-apply-button {
+  .template-apply-button,
+  .branding-apply-button {
     width: 100%;
   }
 }

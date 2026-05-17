@@ -12,6 +12,7 @@ import type {
 import {
   AUDIT_INTEGRITY_HISTORY_ACTION_ID,
   AUDIT_INTEGRITY_PLUGIN_ID,
+  COMPANY_DEFAULT_BRANDING_PLUGIN_ID,
   EMPTY_PLUGIN_CONTRIBUTIONS,
   GENERIC_SMTP_HISTORY_SEND_ACTION_ID,
   GENERIC_SMTP_PLUGIN_ID,
@@ -28,8 +29,10 @@ import {
   type PluginContributions,
   type PluginDescriptor,
   type PluginPermission,
+  type ResolvedPluginBrandingPresetContribution,
   type SmtpDeliveryPluginId
 } from "../../shared/plugins";
+import { compactViewerTheme } from "../../shared/branding";
 import {
   CORE_DOCUMENT_TEMPLATES,
   DEFAULT_DOCUMENT_TEMPLATE_ID,
@@ -124,6 +127,13 @@ type SmtpActionSelection = {
   actionId: string;
 };
 
+type BrandingPresetSnapshot = {
+  pluginId: string;
+  presetId: string;
+  label: string;
+  viewerTheme?: ResolvedPluginBrandingPresetContribution["viewerTheme"];
+};
+
 const textAlignments: TextAlign[] = ["left", "center", "right", "justify"];
 
 const defaultSmtpSettingsForms: Record<SmtpDeliveryPluginId, SmtpSettingsForm> = {
@@ -211,6 +221,9 @@ function pluginDisplayName(plugin: PluginDescriptor): string {
   if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
     return "패키지 무결성 감사";
   }
+  if (plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID) {
+    return "조직 기본 브랜딩";
+  }
   if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
     return "엄격 발행 정책";
   }
@@ -226,6 +239,9 @@ function pluginDisplayDescription(plugin: PluginDescriptor): string {
   }
   if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
     return "저장된 보안 HTML 파일이 발행 당시 기록된 SHA-256 해시와 일치하는지 검사합니다.";
+  }
+  if (plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID) {
+    return "조직명, 기본 워터마크, 오프라인 viewer 색상 preset을 발행 문서에 적용합니다.";
   }
   if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
     return "문서 발행 전 더 긴 PIN, 강한 KDF, 필수 메타데이터 입력을 요구합니다.";
@@ -262,6 +278,13 @@ function pluginFeatureDescriptions(plugin: PluginDescriptor): string[] {
       "PIN, PIN hash, 평문 본문, 암호화 키를 저장하지 않는 선언형 정책입니다."
     ];
   }
+  if (plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID) {
+    return [
+      "문서 기본정보에 조직 발행자와 기본 워터마크 preset을 적용합니다.",
+      "viewer 색상은 패키지 내부의 암호화된 private metadata로만 전달됩니다.",
+      "원격 이미지, 외부 폰트, 외부 네트워크 리소스를 사용하지 않습니다."
+    ];
+  }
 
   const descriptions: string[] = [];
   if (plugin.contributes.settingsPanel) {
@@ -278,6 +301,9 @@ function pluginFeatureDescriptions(plugin: PluginDescriptor): string[] {
   }
   for (const policyProfile of plugin.contributes.policyProfiles ?? []) {
     descriptions.push(`발행 정책: ${policyProfile.description}`);
+  }
+  for (const brandingPreset of plugin.contributes.brandingPresets ?? []) {
+    descriptions.push(`브랜딩 preset: ${brandingPreset.description}`);
   }
   return descriptions;
 }
@@ -298,6 +324,9 @@ function pluginContributionLabels(plugin: PluginDescriptor): string[] {
   }
   if (plugin.contributes.policyProfiles?.length) {
     labels.push("정책 preset");
+  }
+  if (plugin.contributes.brandingPresets?.length) {
+    labels.push("브랜딩 preset");
   }
   return labels;
 }
@@ -521,13 +550,35 @@ function safeFileNamePart(value: string): string {
   return value.normalize("NFKC").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-") || "secure-document";
 }
 
-function compactPrivateMeta(metadata: MetadataState): SecureDocPlainContent["privateMeta"] {
+function brandingPresetKey(preset: Pick<ResolvedPluginBrandingPresetContribution, "pluginId" | "id">): string {
+  return `${preset.pluginId}:${preset.id}`;
+}
+
+function brandingSnapshot(preset: ResolvedPluginBrandingPresetContribution | null): BrandingPresetSnapshot | undefined {
+  if (!preset) {
+    return undefined;
+  }
+
+  const viewerTheme = compactViewerTheme(preset.viewerTheme);
+  return {
+    pluginId: preset.pluginId,
+    presetId: preset.id,
+    label: preset.label,
+    viewerTheme
+  };
+}
+
+function compactPrivateMeta(
+  metadata: MetadataState,
+  brandingPreset: ResolvedPluginBrandingPresetContribution | null
+): SecureDocPlainContent["privateMeta"] {
   return {
     description: metadata.description || undefined,
     docType: metadata.docType || undefined,
     watermarkText: metadata.watermarkText || undefined,
     recipientName: metadata.recipientName || undefined,
-    documentNumber: metadata.documentNumber || undefined
+    documentNumber: metadata.documentNumber || undefined,
+    branding: brandingSnapshot(brandingPreset)
   };
 }
 
@@ -574,6 +625,8 @@ export function App(): ReactElement {
   const [activeNavTarget, setActiveNavTarget] = useState<NavTarget>("document");
   const [selectedTemplateId, setSelectedTemplateId] = useState(DEFAULT_DOCUMENT_TEMPLATE_ID);
   const [activeTemplateId, setActiveTemplateId] = useState(DEFAULT_DOCUMENT_TEMPLATE_ID);
+  const [selectedBrandingPresetKey, setSelectedBrandingPresetKey] = useState("");
+  const [activeBrandingPresetKey, setActiveBrandingPresetKey] = useState("");
   const screenRootRef = useRef<HTMLDivElement | null>(null);
   const didMountScreenRef = useRef(false);
   const programmaticEditorUpdateRef = useRef(false);
@@ -603,6 +656,11 @@ export function App(): ReactElement {
     () => getDocumentTemplateById(activeTemplateId) ?? defaultDocumentTemplate,
     [activeTemplateId]
   );
+  const activeBrandingPresets = pluginContributions.brandingPresets;
+  const selectedBrandingPreset =
+    activeBrandingPresets.find((preset) => brandingPresetKey(preset) === selectedBrandingPresetKey) ?? null;
+  const activeBrandingPreset =
+    activeBrandingPresets.find((preset) => brandingPresetKey(preset) === activeBrandingPresetKey) ?? null;
   const pinResult = useMemo(
     () => evaluatePinPolicy(pin, { minLength: effectivePublishPolicy.minimumPinLength }),
     [effectivePublishPolicy.minimumPinLength, pin]
@@ -633,7 +691,8 @@ export function App(): ReactElement {
   const auditHistoryActionEnabled = hasActiveAuditIntegrityHistoryAction(pluginContributions);
   const activeContributionBadges = [
     ...pluginContributions.publishActions.map((action) => `발행: ${action.label}`),
-    ...pluginContributions.policyProfiles.map((profile) => `정책: ${profile.label}`)
+    ...pluginContributions.policyProfiles.map((profile) => `정책: ${profile.label}`),
+    ...pluginContributions.brandingPresets.map((preset) => `브랜딩: ${preset.label}`)
   ];
   const editor = useEditor({
     extensions: [
@@ -722,6 +781,10 @@ export function App(): ReactElement {
         setAuditReport(null);
         setAuditBusyDocumentId(null);
       }
+      if (plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID && !enabled) {
+        setActiveBrandingPresetKey("");
+        setSelectedBrandingPresetKey("");
+      }
       setStatus(`${pluginDisplayName(plugin)} 플러그인을 ${enabled ? "활성화" : "비활성화"}했습니다.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "플러그인 상태를 변경하지 못했습니다.");
@@ -739,6 +802,18 @@ export function App(): ReactElement {
       setSmtpSettingsForms(defaultSmtpSettingsForms);
     });
   }, []);
+
+  useEffect(() => {
+    const presetKeys = new Set(activeBrandingPresets.map(brandingPresetKey));
+    if (selectedBrandingPresetKey && !presetKeys.has(selectedBrandingPresetKey)) {
+      setSelectedBrandingPresetKey(activeBrandingPresets[0] ? brandingPresetKey(activeBrandingPresets[0]) : "");
+    } else if (!selectedBrandingPresetKey && activeBrandingPresets.length > 0) {
+      setSelectedBrandingPresetKey(brandingPresetKey(activeBrandingPresets[0]));
+    }
+    if (activeBrandingPresetKey && !presetKeys.has(activeBrandingPresetKey)) {
+      setActiveBrandingPresetKey("");
+    }
+  }, [activeBrandingPresetKey, activeBrandingPresets, selectedBrandingPresetKey]);
 
   useEffect(() => {
     editor?.commands.setContent(editorHtml, { emitUpdate: false });
@@ -833,6 +908,34 @@ export function App(): ReactElement {
 
   function handleApplySelectedTemplate(): void {
     applyTemplate(selectedTemplate);
+  }
+
+  function applyBrandingPreset(preset: ResolvedPluginBrandingPresetContribution | null): void {
+    if (!preset) {
+      setActiveBrandingPresetKey("");
+      setStatus("브랜딩 preset 적용을 해제했습니다.");
+      setError("");
+      return;
+    }
+
+    const nextMetadata = {
+      ...metadata,
+      issuer: preset.issuer ?? metadata.issuer,
+      watermarkText: preset.watermarkText ?? metadata.watermarkText
+    };
+
+    setMetadata(nextMetadata);
+    setSelectedBrandingPresetKey(brandingPresetKey(preset));
+    setActiveBrandingPresetKey(brandingPresetKey(preset));
+    if (syncPresetWithMetadata && preset.issuer) {
+      replaceEditorHtml(buildTemplateHtml(activeTemplate, nextMetadata));
+    }
+    setStatus(`${preset.label} 브랜딩 preset을 적용했습니다.`);
+    setError("");
+  }
+
+  function handleApplySelectedBrandingPreset(): void {
+    applyBrandingPreset(selectedBrandingPreset);
   }
 
   function updateMetadata<K extends keyof MetadataState>(key: K, value: MetadataState[K]): void {
@@ -1277,7 +1380,7 @@ export function App(): ReactElement {
         format: "html",
         html: sanitizedPreview,
         assets: [],
-        privateMeta: compactPrivateMeta(publishMetadata)
+        privateMeta: compactPrivateMeta(publishMetadata, activeBrandingPreset)
       };
 
       const securePackage = await issueSecureDocument({
@@ -1449,6 +1552,48 @@ export function App(): ReactElement {
               템플릿 적용
             </button>
           </div>
+          {activeBrandingPresets.length > 0 && (
+            <div className="branding-picker">
+              <label>
+                브랜딩
+                <select
+                  value={selectedBrandingPresetKey}
+                  onChange={(event) => setSelectedBrandingPresetKey(event.target.value)}
+                >
+                  {activeBrandingPresets.map((preset) => (
+                    <option key={brandingPresetKey(preset)} value={brandingPresetKey(preset)}>
+                      {preset.pluginName} · {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="branding-summary">
+                {selectedBrandingPreset ? (
+                  <>
+                    <strong>{selectedBrandingPreset.label}</strong>
+                    <span>{selectedBrandingPreset.description}</span>
+                    {selectedBrandingPreset.viewerTheme && (
+                      <div className="branding-swatch-row" aria-hidden="true">
+                        {Object.entries(compactViewerTheme(selectedBrandingPreset.viewerTheme) ?? {}).map(([key, value]) => (
+                          <span className="branding-swatch" key={key} style={{ backgroundColor: String(value) }} />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <span>활성 브랜딩 preset이 없습니다.</span>
+                )}
+              </div>
+              <button
+                type="button"
+                className="branding-apply-button"
+                onClick={handleApplySelectedBrandingPreset}
+                disabled={!selectedBrandingPreset}
+              >
+                브랜딩 적용
+              </button>
+            </div>
+          )}
           <details className="admin-meta-details">
             <summary>관리용 정보</summary>
             <div className="admin-meta-grid">
@@ -2052,6 +2197,17 @@ export function App(): ReactElement {
                   <li key={item}>{item}</li>
                 ))}
               </ul>
+            </div>
+            <div className="publish-branding-summary">
+              <strong>적용 브랜딩</strong>
+              {activeBrandingPreset ? (
+                <span>
+                  {activeBrandingPreset.pluginName} · {activeBrandingPreset.label}
+                  {activeBrandingPreset.watermarkText ? ` · 워터마크 ${activeBrandingPreset.watermarkText}` : ""}
+                </span>
+              ) : (
+                <span>기본 viewer 스타일</span>
+              )}
             </div>
             <div className="publish-dialog-grid">
               <label className="field-pin">

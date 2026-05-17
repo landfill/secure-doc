@@ -141,6 +141,45 @@ test("renders watermark layer after unlock without exposing watermark text befor
   assert.match(html, /watermark\.classList\.toggle\("visible", Boolean\(watermarkText\)\)/);
 });
 
+test("keeps branding viewer theme encrypted and applies only safe colors after unlock", async () => {
+  const brandedContent: SecureDocPlainContent = {
+    ...content,
+    privateMeta: {
+      branding: {
+        pluginId: "branding.company-defaults",
+        presetId: "company-defaults",
+        label: "Company defaults",
+        viewerTheme: {
+          accentColor: "#123456",
+          accentSoftColor: "#eef4ff",
+          documentBorderColor: "#123456"
+        }
+      }
+    }
+  };
+  const pkg = await issueSecureDocument({
+    content: brandedContent,
+    pin,
+    iterations: 1000,
+    metadata: {
+      id: "doc_20260512_branding",
+      title: "보안문서",
+      issuer: "회사명",
+      issuedAt: "2026-05-12T09:00:00+09:00"
+    }
+  });
+
+  const html = buildSecureHtmlDocument(pkg);
+  const unlocked = await unlockSecureDocument(pin, pkg);
+
+  assert.equal(unlocked.privateMeta?.branding?.viewerTheme?.accentColor, "#123456");
+  assert.equal(JSON.stringify(pkg).includes("#123456"), false);
+  assert.equal(html.includes("#123456"), false);
+  assert.match(html, /applyViewerTheme\(branding && branding\.viewerTheme\)/);
+  assert.match(html, /document\.documentElement\.style\.setProperty\(variableName/);
+  assert.match(html, /connect-src 'none'/);
+});
+
 test("creates different salt, IVs, and wrapped DEKs for the same PIN", async () => {
   const first = await issueSecureDocument({
     content,
