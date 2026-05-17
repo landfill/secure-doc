@@ -535,6 +535,10 @@ export function App(): ReactElement {
       }),
     [activePolicyProfiles, contentText, iterations, metadata, pin, pinConfirm]
   );
+  const secondaryPublishPolicyMessages = useMemo(
+    () => publishPolicyResult.messages.filter((message) => message !== pinResult.message),
+    [pinResult.message, publishPolicyResult.messages]
+  );
   const smtpSendActionEnabled = hasActiveSmtpSendAction(pluginContributions);
   const smtpPluginEnabled = isSmtpPluginEnabled(plugins);
   const smtpHistorySendActionEnabled = hasActiveSmtpHistorySendAction(pluginContributions);
@@ -1890,9 +1894,9 @@ export function App(): ReactElement {
               </button>
             </div>
             <div className={pinResult.valid ? "policy ok" : "policy"}>{pin ? pinResult.message : "PIN 정책 검사 대기 중"}</div>
-            {activePolicyProfiles.length > 0 && publishPolicyResult.messages.length > 0 && (pin || pinConfirm) && (
+            {activePolicyProfiles.length > 0 && secondaryPublishPolicyMessages.length > 0 && (pin || pinConfirm) && (
               <ul className="publish-policy-errors">
-                {publishPolicyResult.messages.map((message) => (
+                {secondaryPublishPolicyMessages.map((message) => (
                   <li key={message}>{message}</li>
                 ))}
               </ul>

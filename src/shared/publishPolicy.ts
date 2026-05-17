@@ -2,7 +2,8 @@ import {
   COMPAT_PIN_KDF_ITERATIONS,
   PIN_MAX_LENGTH,
   PIN_MIN_LENGTH,
-  evaluatePinPolicy
+  evaluatePinPolicy,
+  normalizePin
 } from "./pinPolicy.ts";
 import type { ResolvedPluginPolicyProfileContribution } from "./plugins.ts";
 
@@ -102,7 +103,7 @@ export function evaluatePublishPolicy(input: PublishPolicyEvaluationInput): Publ
   if (!pinResult.valid) {
     messages.push(pinResult.message);
   }
-  if (pinResult.normalizedPin !== input.pinConfirm.normalize("NFKC").trim()) {
+  if (pinResult.normalizedPin !== normalizePin(input.pinConfirm)) {
     messages.push("PIN 확인 입력이 일치하지 않습니다.");
   }
 
