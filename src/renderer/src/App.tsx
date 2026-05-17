@@ -2,9 +2,18 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import type { PublishHistoryRecord } from "../../shared/desktopApi";
+import type {
+  PublishHistoryRecord,
+  SaveSmtpSettingsRequest,
+  SendSmtpEmailResult,
+  SmtpSettingsView
+} from "../../shared/desktopApi";
 import {
   EMPTY_PLUGIN_CONTRIBUTIONS,
+  GMAIL_SMTP_HISTORY_SEND_ACTION_ID,
+  GMAIL_SMTP_PLUGIN_ID,
+  GMAIL_SMTP_SEND_ACTION_ID,
+  GMAIL_SMTP_TEST_ACTION_ID,
   type PluginContributions,
   type PluginDescriptor,
   type PluginPermission
@@ -57,7 +66,45 @@ type DocumentPreset = {
   buildHtml: (metadata: MetadataState) => string;
 };
 
+type SmtpSettingsForm = {
+  host: string;
+  port: string;
+  senderEmail: string;
+  appPassword: string;
+};
+
+type PendingEmailPackage = {
+  source: "publish";
+  attachmentFileName: string;
+  attachmentHtml: string;
+  filePath: string;
+} | {
+  source: "history";
+  documentId: string;
+  attachmentFileName: string;
+  filePath: string;
+};
+
+type EmailSendForm = {
+  recipientEmail: string;
+  subject: string;
+  attachmentFileName: string;
+};
+
 const textAlignments: TextAlign[] = ["left", "center", "right", "justify"];
+
+const defaultSmtpSettingsForm: SmtpSettingsForm = {
+  host: "smtp.gmail.com",
+  port: "587",
+  senderEmail: "",
+  appPassword: ""
+};
+
+const defaultEmailSendForm: EmailSendForm = {
+  recipientEmail: "",
+  subject: "",
+  attachmentFileName: ""
+};
 
 const navigationItems: { id: NavTarget; label: string }[] = [
   { id: "document", label: "문서 발행" },
@@ -99,6 +146,44 @@ function pluginContributionLabels(plugin: PluginDescriptor): string[] {
     labels.push("이력 액션");
   }
   return labels;
+}
+
+function smtpSettingsToForm(settings: SmtpSettingsView): SmtpSettingsForm {
+  return {
+    host: settings.host,
+    port: String(settings.port),
+    senderEmail: settings.senderEmail,
+    appPassword: ""
+  };
+}
+
+function hasActiveSmtpSendAction(contributions: PluginContributions): boolean {
+  return contributions.publishActions.some(
+    (action) => action.pluginId === GMAIL_SMTP_PLUGIN_ID && action.id === GMAIL_SMTP_SEND_ACTION_ID
+  );
+}
+
+function hasActiveSmtpHistorySendAction(contributions: PluginContributions): boolean {
+  return contributions.historyActions.some(
+    (action) => action.pluginId === GMAIL_SMTP_PLUGIN_ID && action.id === GMAIL_SMTP_HISTORY_SEND_ACTION_ID
+  );
+}
+
+function isSmtpPluginEnabled(plugins: readonly PluginDescriptor[]): boolean {
+  return plugins.some((plugin) => plugin.id === GMAIL_SMTP_PLUGIN_ID && plugin.enabled);
+}
+
+function fileNameFromPath(filePath: string): string {
+  const name = filePath.split(/[\\/]/).filter(Boolean).pop() ?? "";
+  return name.endsWith(".html") ? name : "secure-document.html";
+}
+
+function normalizeEmailAddressInput(value: string, fieldLabel: string): string {
+  const email = value.normalize("NFKC").trim();
+  if (!email || email.length > 254 || /\s/.test(email) || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
+    throw new Error(`${fieldLabel}을 올바른 이메일 주소로 입력하세요.`);
+  }
+  return email;
 }
 
 const SecureDocTextAlign = Extension.create({
@@ -416,8 +501,17 @@ export function App(): ReactElement {
   const [plugins, setPlugins] = useState<PluginDescriptor[]>([]);
   const [pluginContributions, setPluginContributions] = useState<PluginContributions>(EMPTY_PLUGIN_CONTRIBUTIONS);
   const [pluginBusyId, setPluginBusyId] = useState<string | null>(null);
+  const [smtpSettings, setSmtpSettings] = useState<SmtpSettingsView | null>(null);
+  const [smtpSettingsForm, setSmtpSettingsForm] = useState<SmtpSettingsForm>(defaultSmtpSettingsForm);
+  const [smtpBusy, setSmtpBusy] = useState(false);
+  const [smtpStatus, setSmtpStatus] = useState("");
+  const [smtpError, setSmtpError] = useState("");
   const [syncPresetWithMetadata, setSyncPresetWithMetadata] = useState(true);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [pendingEmailPackage, setPendingEmailPackage] = useState<PendingEmailPackage | null>(null);
+  const [emailSendForm, setEmailSendForm] = useState<EmailSendForm>(defaultEmailSendForm);
+  const [emailBusy, setEmailBusy] = useState(false);
   const [activeNavTarget, setActiveNavTarget] = useState<NavTarget>("document");
   const screenRootRef = useRef<HTMLDivElement | null>(null);
   const didMountScreenRef = useRef(false);
@@ -426,6 +520,9 @@ export function App(): ReactElement {
   const pinResult = useMemo(() => evaluatePinPolicy(pin), [pin]);
   const sanitizedPreview = useMemo(() => sanitizeHtml(editorHtml), [editorHtml]);
   const contentText = useMemo(() => stripHtml(sanitizedPreview), [sanitizedPreview]);
+  const smtpSendActionEnabled = hasActiveSmtpSendAction(pluginContributions);
+  const smtpPluginEnabled = isSmtpPluginEnabled(plugins);
+  const smtpHistorySendActionEnabled = hasActiveSmtpHistorySendAction(pluginContributions);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -462,12 +559,20 @@ export function App(): ReactElement {
     if (!pluginApi) {
       setPlugins([]);
       setPluginContributions(EMPTY_PLUGIN_CONTRIBUTIONS);
+      setSmtpSettings(null);
+      setSmtpSettingsForm(defaultSmtpSettingsForm);
       return;
     }
 
-    const [nextPlugins, nextContributions] = await Promise.all([pluginApi.list(), pluginApi.getContributions()]);
+    const [nextPlugins, nextContributions, nextSmtpSettings] = await Promise.all([
+      pluginApi.list(),
+      pluginApi.getContributions(),
+      pluginApi.getSettings(GMAIL_SMTP_PLUGIN_ID)
+    ]);
     setPlugins(nextPlugins);
     setPluginContributions(nextContributions);
+    setSmtpSettings(nextSmtpSettings as SmtpSettingsView);
+    setSmtpSettingsForm(smtpSettingsToForm(nextSmtpSettings as SmtpSettingsView));
   }
 
   async function handlePluginToggle(plugin: PluginDescriptor, enabled: boolean): Promise<void> {
@@ -484,6 +589,12 @@ export function App(): ReactElement {
       const nextContributions = await pluginApi.getContributions();
       setPlugins(nextPlugins);
       setPluginContributions(nextContributions);
+      if (plugin.id === GMAIL_SMTP_PLUGIN_ID && !enabled) {
+        setEmailDialogOpen(false);
+        setPendingEmailPackage(null);
+        setSmtpStatus("");
+        setSmtpError("");
+      }
       setStatus(`${plugin.name} 플러그인을 ${enabled ? "활성화" : "비활성화"}했습니다.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "플러그인 상태를 변경하지 못했습니다.");
@@ -497,6 +608,8 @@ export function App(): ReactElement {
     refreshPlugins().catch(() => {
       setPlugins([]);
       setPluginContributions(EMPTY_PLUGIN_CONTRIBUTIONS);
+      setSmtpSettings(null);
+      setSmtpSettingsForm(defaultSmtpSettingsForm);
     });
   }, []);
 
@@ -527,6 +640,21 @@ export function App(): ReactElement {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [busy, publishDialogOpen]);
+
+  useEffect(() => {
+    if (!emailDialogOpen) {
+      return undefined;
+    }
+
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape" && !emailBusy) {
+        setEmailDialogOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [emailBusy, emailDialogOpen]);
 
   function replaceEditorHtml(nextHtml: string): void {
     const sanitizedHtml = sanitizeHtml(nextHtml);
@@ -690,6 +818,188 @@ export function App(): ReactElement {
     }
   }
 
+  function updateSmtpSettingsForm<K extends keyof SmtpSettingsForm>(key: K, value: SmtpSettingsForm[K]): void {
+    setSmtpSettingsForm((current) => ({
+      ...current,
+      [key]: value
+    }));
+  }
+
+  async function saveSmtpSettingsFromForm(): Promise<SmtpSettingsView> {
+    const pluginApi = window.secureDoc?.plugins;
+    if (!pluginApi) {
+      throw new Error("Electron plugin bridge is not available.");
+    }
+
+    const request: SaveSmtpSettingsRequest = {
+      host: smtpSettingsForm.host,
+      port: Number(smtpSettingsForm.port),
+      senderEmail: smtpSettingsForm.senderEmail
+    };
+    if (smtpSettingsForm.appPassword.trim()) {
+      request.appPassword = smtpSettingsForm.appPassword;
+    }
+
+    const nextSettings = (await pluginApi.saveSettings(GMAIL_SMTP_PLUGIN_ID, request)) as SmtpSettingsView;
+    setSmtpSettings(nextSettings);
+    setSmtpSettingsForm(smtpSettingsToForm(nextSettings));
+    return nextSettings;
+  }
+
+  async function handleSaveSmtpSettings(): Promise<void> {
+    setSmtpBusy(true);
+    setSmtpStatus("");
+    setSmtpError("");
+    try {
+      await saveSmtpSettingsFromForm();
+      setSmtpStatus("SMTP 설정을 저장했습니다.");
+    } catch (caught) {
+      setSmtpError(caught instanceof Error ? caught.message : "SMTP 설정을 저장하지 못했습니다.");
+    } finally {
+      setSmtpBusy(false);
+    }
+  }
+
+  async function handleClearSmtpSettings(): Promise<void> {
+    const pluginApi = window.secureDoc?.plugins;
+    if (!pluginApi) {
+      setSmtpError("Electron plugin bridge is not available.");
+      return;
+    }
+
+    setSmtpBusy(true);
+    setSmtpStatus("");
+    setSmtpError("");
+    try {
+      const nextSettings = (await pluginApi.clearSettings(GMAIL_SMTP_PLUGIN_ID)) as SmtpSettingsView;
+      setSmtpSettings(nextSettings);
+      setSmtpSettingsForm(smtpSettingsToForm(nextSettings));
+      setSmtpStatus("SMTP 설정을 삭제했습니다.");
+    } catch (caught) {
+      setSmtpError(caught instanceof Error ? caught.message : "SMTP 설정을 삭제하지 못했습니다.");
+    } finally {
+      setSmtpBusy(false);
+    }
+  }
+
+  async function handleTestSmtpSettings(): Promise<void> {
+    const pluginApi = window.secureDoc?.plugins;
+    if (!pluginApi) {
+      setSmtpError("Electron plugin bridge is not available.");
+      return;
+    }
+
+    setSmtpBusy(true);
+    setSmtpStatus("");
+    setSmtpError("");
+    try {
+      await saveSmtpSettingsFromForm();
+      await pluginApi.runAction(GMAIL_SMTP_PLUGIN_ID, GMAIL_SMTP_TEST_ACTION_ID);
+      setSmtpStatus("SMTP 연결 테스트에 성공했습니다.");
+    } catch (caught) {
+      setSmtpError(caught instanceof Error ? caught.message : "SMTP 연결 테스트에 실패했습니다.");
+    } finally {
+      setSmtpBusy(false);
+    }
+  }
+
+  function updateEmailSendForm<K extends keyof EmailSendForm>(key: K, value: EmailSendForm[K]): void {
+    setEmailSendForm((current) => ({
+      ...current,
+      [key]: value
+    }));
+  }
+
+  function closeEmailDialog(): void {
+    if (!emailBusy) {
+      setEmailDialogOpen(false);
+    }
+  }
+
+  function openHistoryEmailDialog(item: PublishHistoryRecord): void {
+    if (!smtpPluginEnabled) {
+      setError("SMTP 플러그인을 활성화해야 발행 이력에서 이메일을 보낼 수 있습니다.");
+      return;
+    }
+
+    const attachmentFileName = fileNameFromPath(item.outputPath);
+    setPendingEmailPackage({
+      source: "history",
+      documentId: item.documentId,
+      attachmentFileName,
+      filePath: item.outputPath
+    });
+    setEmailSendForm({
+      recipientEmail: "",
+      subject: `Secure document: ${item.title}`,
+      attachmentFileName
+    });
+    setStatus("");
+    setError("");
+    setEmailDialogOpen(true);
+  }
+
+  async function handleSendEmail(): Promise<void> {
+    const pluginApi = window.secureDoc?.plugins;
+    if (!pluginApi || !pendingEmailPackage) {
+      setError("Email delivery is not available.");
+      return;
+    }
+
+    let recipientEmail: string;
+    let subject: string;
+    let attachmentFileName: string;
+    try {
+      recipientEmail = normalizeEmailAddressInput(emailSendForm.recipientEmail, "수신자 이메일");
+      subject = emailSendForm.subject.normalize("NFKC").trim();
+      attachmentFileName = emailSendForm.attachmentFileName.normalize("NFKC").trim();
+      if (!subject) {
+        throw new Error("이메일 제목을 입력하세요.");
+      }
+      if (!attachmentFileName.endsWith(".html")) {
+        throw new Error("첨부 파일명은 .html로 끝나야 합니다.");
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "이메일 발송 정보를 확인하세요.");
+      setStatus("");
+      return;
+    }
+
+    setEmailBusy(true);
+    setError("");
+    setStatus("이메일 발송 중입니다.");
+    try {
+      const result = (await pluginApi.runAction(
+        GMAIL_SMTP_PLUGIN_ID,
+        pendingEmailPackage.source === "history" ? GMAIL_SMTP_HISTORY_SEND_ACTION_ID : GMAIL_SMTP_SEND_ACTION_ID,
+        pendingEmailPackage.source === "history"
+          ? {
+              documentId: pendingEmailPackage.documentId,
+              outputPath: pendingEmailPackage.filePath,
+              recipientEmail,
+              subject,
+              attachmentFileName
+            }
+          : {
+              recipientEmail,
+              subject,
+              attachmentFileName,
+              attachmentHtml: pendingEmailPackage.attachmentHtml
+            }
+      )) as SendSmtpEmailResult;
+      const messageSuffix = result.messageId ? ` (${result.messageId})` : "";
+      setStatus(`이메일 발송 완료${messageSuffix}`);
+      setEmailDialogOpen(false);
+      setPendingEmailPackage(null);
+      setEmailSendForm(defaultEmailSendForm);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "이메일 발송 중 오류가 발생했습니다.");
+      setStatus("");
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
   async function handleCopyPin(): Promise<void> {
     if (!pinResult.valid) {
       setError(pinResult.message);
@@ -776,6 +1086,20 @@ export function App(): ReactElement {
       setPublishDialogOpen(false);
       setPin("");
       setPinConfirm("");
+      if (smtpSendActionEnabled && saveResult.filePath) {
+        setPendingEmailPackage({
+          source: "publish",
+          attachmentFileName: suggestedFileName,
+          attachmentHtml: html,
+          filePath: saveResult.filePath
+        });
+        setEmailSendForm({
+          recipientEmail: "",
+          subject: `Secure document: ${securePackage.doc.title}`,
+          attachmentFileName: suggestedFileName
+        });
+        setEmailDialogOpen(true);
+      }
       const nextHistory = await window.secureDoc.getHistory();
       setHistory(nextHistory);
     } catch (caught) {
@@ -1146,12 +1470,13 @@ export function App(): ReactElement {
                   <th>반복</th>
                   <th>SHA-256</th>
                   <th>파일</th>
+                  <th>이메일</th>
                 </tr>
               </thead>
               <tbody>
                 {history.length === 0 ? (
                   <tr>
-                    <td colSpan={5}>저장된 발행 이력이 없습니다.</td>
+                    <td colSpan={6}>저장된 발행 이력이 없습니다.</td>
                   </tr>
                 ) : (
                   history.map((item) => (
@@ -1166,6 +1491,15 @@ export function App(): ReactElement {
                       <td>
                         <button type="button" onClick={() => window.secureDoc?.showItemInFolder(item.outputPath)}>
                           보기
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => openHistoryEmailDialog(item)}
+                          disabled={!smtpPluginEnabled}
+                        >
+                          발송
                         </button>
                       </td>
                     </tr>
@@ -1233,6 +1567,87 @@ export function App(): ReactElement {
                         </span>
                       ))}
                     </div>
+                    {plugin.id === GMAIL_SMTP_PLUGIN_ID && plugin.enabled && (
+                      <div className="smtp-settings-panel">
+                        <div className="smtp-settings-heading">
+                          <strong>Gmail SMTP 설정</strong>
+                          <span className={smtpSettings?.hasAppPassword ? "smtp-secret-badge saved" : "smtp-secret-badge"}>
+                            {smtpSettings?.hasAppPassword ? "비밀번호 저장됨" : "비밀번호 필요"}
+                          </span>
+                        </div>
+                        <div className="smtp-settings-grid">
+                          <label className="smtp-field smtp-field-host">
+                            SMTP host
+                            <input
+                              value={smtpSettingsForm.host}
+                              onChange={(event) => updateSmtpSettingsForm("host", event.target.value)}
+                              placeholder="smtp.gmail.com"
+                            />
+                          </label>
+                          <label className="smtp-field smtp-field-port">
+                            SMTP port
+                            <input
+                              value={smtpSettingsForm.port}
+                              onChange={(event) => updateSmtpSettingsForm("port", event.target.value)}
+                              inputMode="numeric"
+                              placeholder="587"
+                            />
+                          </label>
+                          <label className="smtp-field smtp-field-account">
+                            Gmail 계정
+                            <input
+                              value={smtpSettingsForm.senderEmail}
+                              onChange={(event) => updateSmtpSettingsForm("senderEmail", event.target.value)}
+                              placeholder="user@gmail.com"
+                              autoComplete="username"
+                            />
+                          </label>
+                          <label className="smtp-field smtp-field-secret">
+                            {smtpSettings?.hasAppPassword ? "앱 비밀번호 교체" : "앱 비밀번호"}
+                            <input
+                              value={smtpSettingsForm.appPassword}
+                              onChange={(event) => updateSmtpSettingsForm("appPassword", event.target.value)}
+                              type="password"
+                              placeholder={smtpSettings?.hasAppPassword ? "새 비밀번호 입력 시 교체" : "abcd efgh ijkl mnop"}
+                              autoComplete="new-password"
+                            />
+                            <span className="field-hint">
+                              {smtpSettings?.hasAppPassword
+                                ? "기존 비밀번호는 저장되어 있으며 표시하지 않습니다. 새 값을 입력하면 저장 시 교체됩니다."
+                                : "Google 앱 비밀번호 16자리를 입력하세요. 공백은 자동 제거됩니다."}
+                            </span>
+                          </label>
+                        </div>
+                        <div className="button-row smtp-settings-actions">
+                          <button
+                            type="button"
+                            className="smtp-command primary-command"
+                            onClick={handleSaveSmtpSettings}
+                            disabled={smtpBusy}
+                          >
+                            설정 저장
+                          </button>
+                          <button
+                            type="button"
+                            className="smtp-command"
+                            onClick={handleTestSmtpSettings}
+                            disabled={smtpBusy}
+                          >
+                            연결 테스트
+                          </button>
+                          <button
+                            type="button"
+                            className="smtp-command danger-command"
+                            onClick={handleClearSmtpSettings}
+                            disabled={smtpBusy}
+                          >
+                            설정 삭제
+                          </button>
+                        </div>
+                        {smtpStatus && <div className="status">{smtpStatus}</div>}
+                        {smtpError && <div className="error">{smtpError}</div>}
+                      </div>
+                    )}
                   </article>
                 );
               })
@@ -1312,6 +1727,69 @@ export function App(): ReactElement {
               </button>
             </div>
             <div className={pinResult.valid ? "policy ok" : "policy"}>{pin ? pinResult.message : "PIN 정책 검사 대기 중"}</div>
+            {status && <div className="status">{status}</div>}
+            {error && <div className="error">{error}</div>}
+          </section>
+        </div>
+      )}
+      {emailDialogOpen && pendingEmailPackage && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeEmailDialog();
+            }
+          }}
+        >
+          <section className="publish-dialog" role="dialog" aria-modal="true" aria-labelledby="email-dialog-heading">
+            <div className="publish-dialog-header">
+              <h2 id="email-dialog-heading">이메일로 발송</h2>
+              <button type="button" className="dialog-close" onClick={closeEmailDialog} disabled={emailBusy}>
+                닫기
+              </button>
+            </div>
+            <p className="security-note publish-note">
+              저장된 보안 HTML 문서만 첨부합니다. 문서 본문 평문과 PIN은 이메일에 포함하지 않습니다.
+            </p>
+            <div className="publish-dialog-grid email-dialog-grid">
+              <label>
+                수신자 이메일
+                <input
+                  value={emailSendForm.recipientEmail}
+                  onChange={(event) => updateEmailSendForm("recipientEmail", event.target.value)}
+                  placeholder="recipient@example.com"
+                  type="email"
+                  autoComplete="email"
+                />
+              </label>
+              <label>
+                제목
+                <input
+                  value={emailSendForm.subject}
+                  onChange={(event) => updateEmailSendForm("subject", event.target.value)}
+                />
+              </label>
+              <label>
+                첨부 파일명
+                <input
+                  value={emailSendForm.attachmentFileName}
+                  onChange={(event) => updateEmailSendForm("attachmentFileName", event.target.value)}
+                />
+              </label>
+            </div>
+            <div className="attachment-confirm">
+              <span>저장 위치</span>
+              <strong>{pendingEmailPackage.filePath}</strong>
+            </div>
+            <div className="button-row publish-dialog-actions">
+              <button type="button" onClick={closeEmailDialog} disabled={emailBusy}>
+                취소
+              </button>
+              <button type="button" className="primary" onClick={handleSendEmail} disabled={emailBusy}>
+                {emailBusy ? "발송 중" : "이메일 발송"}
+              </button>
+            </div>
             {status && <div className="status">{status}</div>}
             {error && <div className="error">{error}</div>}
           </section>

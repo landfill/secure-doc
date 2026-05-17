@@ -58,6 +58,11 @@ export interface PluginContributions {
   historyActions: ResolvedPluginActionContribution[];
 }
 
+export const GMAIL_SMTP_PLUGIN_ID = "delivery.smtp.gmail";
+export const GMAIL_SMTP_SEND_ACTION_ID = "send-email";
+export const GMAIL_SMTP_HISTORY_SEND_ACTION_ID = "send-email-from-history";
+export const GMAIL_SMTP_TEST_ACTION_ID = "test-smtp";
+
 export const EMPTY_PLUGIN_CONTRIBUTIONS: PluginContributions = {
   publishActions: [],
   templates: [],
@@ -66,7 +71,7 @@ export const EMPTY_PLUGIN_CONTRIBUTIONS: PluginContributions = {
 
 export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
   {
-    id: "delivery.smtp.gmail",
+    id: GMAIL_SMTP_PLUGIN_ID,
     name: "Gmail SMTP Delivery",
     version: "0.1.0",
     description: "Sends the issued secure HTML package through Gmail SMTP after explicit activation.",
@@ -76,9 +81,16 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
       settingsPanel: true,
       publishActions: [
         {
-          id: "send-email",
+          id: GMAIL_SMTP_SEND_ACTION_ID,
           label: "Send email",
           description: "Attach the issued secure HTML document to a Gmail SMTP message."
+        }
+      ],
+      historyActions: [
+        {
+          id: GMAIL_SMTP_HISTORY_SEND_ACTION_ID,
+          label: "Send email",
+          description: "Attach a saved secure HTML document from publish history to a Gmail SMTP message."
         }
       ]
     }

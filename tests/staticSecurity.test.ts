@@ -20,7 +20,7 @@ async function collectSourceFiles(directory: string): Promise<string[]> {
   return files.flat();
 }
 
-test("source does not use weak random, browser storage, or numeric PIN input type", async () => {
+test("source does not use weak random, browser storage, numeric PIN input type, or raw SMTP secret persistence", async () => {
   const files = await collectSourceFiles("src");
   const combined = (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
 
@@ -31,4 +31,6 @@ test("source does not use weak random, browser storage, or numeric PIN input typ
   assert.equal(combined.includes("contentEditable"), false);
   assert.equal(combined.includes("../preload/preload.js"), false);
   assert.equal(combined.includes("../preload/preload.mjs"), true);
+  assert.equal(combined.includes("encryptedAppPassword: request.appPassword"), false);
+  assert.equal(combined.includes("encryptedAppPassword: appPassword"), false);
 });
