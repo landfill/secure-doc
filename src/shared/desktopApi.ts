@@ -61,9 +61,36 @@ export interface SmtpConnectionTestResult {
   ok: true;
 }
 
+export type AuditPackageIntegrityStatus = "verified" | "missing" | "tampered";
+
+export interface AuditPackageIntegrityRequest {
+  documentId: string;
+  outputPath: string;
+}
+
+export interface AuditPackageIntegrityReport {
+  pluginId: "audit.integrity.report";
+  actionId: "verify-package";
+  documentId: string;
+  title: string;
+  issuer: string;
+  issuedAt: string;
+  displayExpiresAt?: string;
+  packageSha256: string;
+  kdf: "PBKDF2-HMAC-SHA-256";
+  iterations: number;
+  contentAlg: "AES-256-GCM";
+  createdBy: string;
+  outputPath: string;
+  platform: string;
+  checkedAt: string;
+  status: AuditPackageIntegrityStatus;
+  message: string;
+}
+
 export type PluginSettingsView = SmtpSettingsView;
 export type SavePluginSettingsRequest = SaveSmtpSettingsRequest;
-export type PluginActionResult = SmtpConnectionTestResult | SendSmtpEmailResult;
+export type PluginActionResult = SmtpConnectionTestResult | SendSmtpEmailResult | AuditPackageIntegrityReport;
 
 export interface SecureDocPluginApi {
   list(): Promise<PluginDescriptor[]>;
