@@ -78,6 +78,16 @@ test("SMTP settings are validated and stored without exposing the raw app passwo
       () =>
         service.saveSettings(GMAIL_SMTP_PLUGIN_ID, {
           host: "smtp.gmail.com",
+          port: 465,
+          senderEmail: "sender@gmail.com",
+          appPassword: "abcd efgh ijkl mnop"
+        }),
+      /587/
+    );
+    await assert.rejects(
+      () =>
+        service.saveSettings(GMAIL_SMTP_PLUGIN_ID, {
+          host: "smtp.gmail.com",
           port: 587,
           senderEmail: "sender",
           appPassword: "abcd efgh ijkl mnop"
@@ -123,11 +133,18 @@ test("SMTP actions verify and send through the injected transport only when enab
     let enabled = false;
     let verifyCount = 0;
     const transportOptions: unknown[] = [];
+    const historyRequests: unknown[] = [];
     const sentMessages: unknown[] = [];
     const service = createGmailSmtpPluginService({
       userDataPath,
       secretCodec: fakeSecretCodec,
       isPluginEnabled: async () => enabled,
+      async readHistoryAttachment(request) {
+        historyRequests.push(request);
+        assert.equal(request.documentId, "doc-1");
+        assert.equal(request.outputPath, "C:\\secure\\doc-1.html");
+        return "<!doctype html><title>Encrypted package</title>";
+      },
       createTransport(options): SmtpTransport {
         transportOptions.push(options);
         return {
@@ -156,14 +173,16 @@ test("SMTP actions verify and send through the injected transport only when enab
     assert.equal(verifyCount, 1);
 
     const result = await service.runAction(GMAIL_SMTP_PLUGIN_ID, GMAIL_SMTP_SEND_ACTION_ID, {
+      documentId: "doc-1",
+      outputPath: "C:\\secure\\doc-1.html",
       recipientEmail: "recipient@example.com",
       subject: "Secure document",
-      attachmentFileName: "secure.html",
-      attachmentHtml: "<!doctype html><title>Encrypted package</title>"
+      attachmentFileName: "secure.html"
     });
 
     assert.deepEqual(result, { sent: true, messageId: "message-1" });
     assert.equal(transportOptions.length, 2);
+    assert.equal(historyRequests.length, 1);
     assert.deepEqual(transportOptions[0], {
       host: "smtp.gmail.com",
       port: 587,
@@ -178,7 +197,7 @@ test("SMTP actions verify and send through the injected transport only when enab
       from: "sender@gmail.com",
       to: "recipient@example.com",
       subject: "Secure document",
-      text: "A secure HTML document is attached. The document PIN is delivered separately.",
+      text: "보안 HTML 문서를 첨부했습니다. 문서 열람 PIN은 별도 채널로 전달됩니다.",
       attachments: [
         {
           filename: "secure.html",
@@ -236,7 +255,7 @@ test("SMTP history action reads a validated history attachment before sending", 
       from: "sender@gmail.com",
       to: "recipient@example.com",
       subject: "Saved secure document",
-      text: "A secure HTML document is attached. The document PIN is delivered separately.",
+      text: "보안 HTML 문서를 첨부했습니다. 문서 열람 PIN은 별도 채널로 전달됩니다.",
       attachments: [
         {
           filename: "doc-1.html",
@@ -258,7 +277,7 @@ test("SMTP action errors are mapped to safe messages without leaking secrets or 
         return {
           async verify() {
             const error = new Error(
-              "Auth failed for sender@gmail.com using abcdefghijklmnop with PIN 123456 and Plain confidential body"
+              "Auth failed for sender@gmail.com using abcdefghijklmnop with PIN 123456 PIN hash pinhash-abc DEK dek-secret KEK kek-secret and Plain confidential body"
             );
             Object.assign(error, { code: "EAUTH", responseCode: 535 });
             throw error;
@@ -285,6 +304,62 @@ test("SMTP action errors are mapped to safe messages without leaking secrets or 
         assert.equal(caught.message.includes("sender@gmail.com"), false);
         assert.equal(caught.message.includes("abcdefghijklmnop"), false);
         assert.equal(caught.message.includes("123456"), false);
+        assert.equal(caught.message.includes("pinhash-abc"), false);
+        assert.equal(caught.message.includes("dek-secret"), false);
+        assert.equal(caught.message.includes("kek-secret"), false);
+        assert.equal(caught.message.includes("Plain confidential body"), false);
+        return true;
+      }
+    );
+  });
+});
+
+test("SMTP send failures are mapped to safe messages without leaking attachment contents", async () => {
+  await withTempUserData(async (userDataPath) => {
+    const service = createGmailSmtpPluginService({
+      userDataPath,
+      secretCodec: fakeSecretCodec,
+      isPluginEnabled: async () => true,
+      async readHistoryAttachment() {
+        return "<!doctype html><body>Plain confidential body PIN 123456 PIN hash pinhash-abc DEK dek-secret KEK kek-secret</body>";
+      },
+      createTransport(): SmtpTransport {
+        return {
+          async verify() {},
+          async sendMail() {
+            throw new Error(
+              "SMTP failed for sender@gmail.com using abcdefghijklmnop with Plain confidential body PIN 123456 PIN hash pinhash-abc DEK dek-secret KEK kek-secret"
+            );
+          }
+        };
+      }
+    });
+
+    await service.saveSettings(GMAIL_SMTP_PLUGIN_ID, {
+      host: "smtp.gmail.com",
+      port: 587,
+      senderEmail: "sender@gmail.com",
+      appPassword: "abcd efgh ijkl mnop"
+    });
+
+    await assert.rejects(
+      () =>
+        service.runAction(GMAIL_SMTP_PLUGIN_ID, GMAIL_SMTP_SEND_ACTION_ID, {
+          documentId: "doc-1",
+          outputPath: "C:\\secure\\doc-1.html",
+          recipientEmail: "recipient@example.com",
+          subject: "Secure document",
+          attachmentFileName: "secure.html"
+        }),
+      (caught) => {
+        assert.ok(caught instanceof Error);
+        assert.match(caught.message, /SMTP request failed/);
+        assert.equal(caught.message.includes("sender@gmail.com"), false);
+        assert.equal(caught.message.includes("abcdefghijklmnop"), false);
+        assert.equal(caught.message.includes("123456"), false);
+        assert.equal(caught.message.includes("pinhash-abc"), false);
+        assert.equal(caught.message.includes("dek-secret"), false);
+        assert.equal(caught.message.includes("kek-secret"), false);
         assert.equal(caught.message.includes("Plain confidential body"), false);
         return true;
       }

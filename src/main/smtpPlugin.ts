@@ -47,6 +47,18 @@ interface SmtpMailOptions {
   }>;
 }
 
+interface PreparedSmtpEmailRequest {
+  recipientEmail: string;
+  subject: string;
+  attachmentFileName: string;
+  attachmentHtml: string;
+}
+
+interface SmtpTransportContext {
+  senderEmail: string;
+  transport: SmtpTransport;
+}
+
 export interface SmtpTransport {
   verify(): Promise<unknown>;
   sendMail(options: SmtpMailOptions): Promise<{ messageId?: string }>;
@@ -115,8 +127,8 @@ export function normalizeSmtpHost(value: unknown): string {
 
 export function normalizeSmtpPort(value: unknown): number {
   const port = typeof value === "number" ? value : Number(value);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error("SMTP port must be a number from 1 to 65535.");
+  if (port !== 587) {
+    throw new Error("Gmail SMTP port must be 587 for STARTTLS.");
   }
   return port;
 }
@@ -217,40 +229,13 @@ function normalizeSendRequest(payload: unknown): SendSmtpEmailRequest {
     throw new Error("Email send request is required.");
   }
 
-  const attachmentFileName = typeof payload.attachmentFileName === "string" ? payload.attachmentFileName.trim() : "";
-  const attachmentHtml = typeof payload.attachmentHtml === "string" ? payload.attachmentHtml : "";
-  const subject = typeof payload.subject === "string" ? payload.subject.normalize("NFKC").trim() : "";
-
-  if (!attachmentFileName.endsWith(".html")) {
-    throw new Error("Attachment file name must end with .html.");
-  }
-  if (!attachmentHtml) {
-    throw new Error("Attachment HTML is required.");
-  }
-  if (!subject) {
-    throw new Error("Email subject is required.");
-  }
-
-  return {
-    recipientEmail: normalizeSmtpEmail(payload.recipientEmail, "Recipient email"),
-    subject,
-    attachmentFileName,
-    attachmentHtml
-  };
-}
-
-function normalizeHistorySendRequest(payload: unknown): SendSmtpHistoryEmailRequest {
-  if (!isRecord(payload)) {
-    throw new Error("History email send request is required.");
-  }
-
   const documentId = typeof payload.documentId === "string" ? payload.documentId.trim() : "";
   const outputPath = typeof payload.outputPath === "string" ? payload.outputPath.trim() : "";
   const attachmentFileName = typeof payload.attachmentFileName === "string" ? payload.attachmentFileName.trim() : "";
   const subject = typeof payload.subject === "string" ? payload.subject.normalize("NFKC").trim() : "";
 
   if (!documentId || !outputPath) {
-    throw new Error("Publish history item is required.");
+    throw new Error("Saved secure package is required.");
   }
   if (!attachmentFileName.endsWith(".html")) {
     throw new Error("Attachment file name must end with .html.");
@@ -266,6 +251,10 @@ function normalizeHistorySendRequest(payload: unknown): SendSmtpHistoryEmailRequ
     subject,
     attachmentFileName
   };
+}
+
+function normalizeHistorySendRequest(payload: unknown): SendSmtpHistoryEmailRequest {
+  return normalizeSendRequest(payload);
 }
 
 function createDefaultTransport(options: SmtpTransportOptions): SmtpTransport {
@@ -329,24 +318,11 @@ export function createGmailSmtpPluginService({
     }
   }
 
-  async function createConfiguredTransport(): Promise<SmtpTransport> {
+  async function createTransportContext(): Promise<SmtpTransportContext> {
     const settings = await loadCredentials();
-    return createTransport({
-      host: settings.host,
-      port: settings.port,
-      secure: false,
-      requireTLS: true,
-      auth: {
-        user: settings.senderEmail,
-        pass: settings.appPassword
-      }
-    });
-  }
-
-  async function sendSecureHtmlEmail(request: SendSmtpEmailRequest): Promise<SendSmtpEmailResult> {
-    try {
-      const settings = await loadCredentials();
-      const transport = createTransport({
+    return {
+      senderEmail: settings.senderEmail,
+      transport: createTransport({
         host: settings.host,
         port: settings.port,
         secure: false,
@@ -355,12 +331,22 @@ export function createGmailSmtpPluginService({
           user: settings.senderEmail,
           pass: settings.appPassword
         }
-      });
+      })
+    };
+  }
+
+  async function createConfiguredTransport(): Promise<SmtpTransport> {
+    return (await createTransportContext()).transport;
+  }
+
+  async function sendSecureHtmlEmail(request: PreparedSmtpEmailRequest): Promise<SendSmtpEmailResult> {
+    try {
+      const { senderEmail, transport } = await createTransportContext();
       const sent = await transport.sendMail({
-        from: settings.senderEmail,
+        from: senderEmail,
         to: request.recipientEmail,
         subject: request.subject,
-        text: "A secure HTML document is attached. The document PIN is delivered separately.",
+        text: "보안 HTML 문서를 첨부했습니다. 문서 열람 PIN은 별도 채널로 전달됩니다.",
         attachments: [
           {
             filename: request.attachmentFileName,
@@ -376,6 +362,20 @@ export function createGmailSmtpPluginService({
     } catch (caught) {
       throw new Error(toSafeSmtpError(caught));
     }
+  }
+
+  async function sendVerifiedHistoryEmail(request: SendSmtpEmailRequest): Promise<SendSmtpEmailResult> {
+    if (!readHistoryAttachment) {
+      throw new Error("Publish history email delivery is not available.");
+    }
+
+    const attachmentHtml = await readHistoryAttachment(request);
+    return sendSecureHtmlEmail({
+      recipientEmail: request.recipientEmail,
+      subject: request.subject,
+      attachmentFileName: request.attachmentFileName,
+      attachmentHtml
+    });
   }
 
   async function assertEnabled(): Promise<void> {
@@ -441,22 +441,12 @@ export function createGmailSmtpPluginService({
 
       if (actionId === GMAIL_SMTP_SEND_ACTION_ID) {
         const request = normalizeSendRequest(payload);
-        return sendSecureHtmlEmail(request);
+        return sendVerifiedHistoryEmail(request);
       }
 
       if (actionId === GMAIL_SMTP_HISTORY_SEND_ACTION_ID) {
-        if (!readHistoryAttachment) {
-          throw new Error("Publish history email delivery is not available.");
-        }
-
         const historyRequest = normalizeHistorySendRequest(payload);
-        const attachmentHtml = await readHistoryAttachment(historyRequest);
-        return sendSecureHtmlEmail({
-          recipientEmail: historyRequest.recipientEmail,
-          subject: historyRequest.subject,
-          attachmentFileName: historyRequest.attachmentFileName,
-          attachmentHtml
-        });
+        return sendVerifiedHistoryEmail(historyRequest);
       }
 
       throw new Error(`Unknown plugin action: ${actionId}`);

@@ -75,8 +75,8 @@ type SmtpSettingsForm = {
 
 type PendingEmailPackage = {
   source: "publish";
+  documentId: string;
   attachmentFileName: string;
-  attachmentHtml: string;
   filePath: string;
 } | {
   source: "history";
@@ -917,7 +917,7 @@ export function App(): ReactElement {
   }
 
   function openHistoryEmailDialog(item: PublishHistoryRecord): void {
-    if (!smtpPluginEnabled) {
+    if (!smtpHistorySendActionEnabled) {
       setError("SMTP 플러그인을 활성화해야 발행 이력에서 이메일을 보낼 수 있습니다.");
       return;
     }
@@ -981,10 +981,11 @@ export function App(): ReactElement {
               attachmentFileName
             }
           : {
+              documentId: pendingEmailPackage.documentId,
+              outputPath: pendingEmailPackage.filePath,
               recipientEmail,
               subject,
-              attachmentFileName,
-              attachmentHtml: pendingEmailPackage.attachmentHtml
+              attachmentFileName
             }
       )) as SendSmtpEmailResult;
       const messageSuffix = result.messageId ? ` (${result.messageId})` : "";
@@ -1089,8 +1090,8 @@ export function App(): ReactElement {
       if (smtpSendActionEnabled && saveResult.filePath) {
         setPendingEmailPackage({
           source: "publish",
+          documentId: securePackage.doc.id,
           attachmentFileName: suggestedFileName,
-          attachmentHtml: html,
           filePath: saveResult.filePath
         });
         setEmailSendForm({
@@ -1497,7 +1498,7 @@ export function App(): ReactElement {
                         <button
                           type="button"
                           onClick={() => openHistoryEmailDialog(item)}
-                          disabled={!smtpPluginEnabled}
+                          disabled={!smtpHistorySendActionEnabled}
                         >
                           발송
                         </button>

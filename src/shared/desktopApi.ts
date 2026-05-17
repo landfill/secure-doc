@@ -43,19 +43,14 @@ export interface SaveSmtpSettingsRequest {
 }
 
 export interface SendSmtpEmailRequest {
-  recipientEmail: string;
-  subject: string;
-  attachmentFileName: string;
-  attachmentHtml: string;
-}
-
-export interface SendSmtpHistoryEmailRequest {
   documentId: string;
   outputPath: string;
   recipientEmail: string;
   subject: string;
   attachmentFileName: string;
 }
+
+export type SendSmtpHistoryEmailRequest = SendSmtpEmailRequest;
 
 export interface SendSmtpEmailResult {
   sent: true;
