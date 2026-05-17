@@ -53,13 +53,25 @@ export function createPluginStore(
 ): PluginStore {
   const statePath = join(userDataPath, "plugin-state.json");
   const knownIds = new Set(manifests.map((manifest) => manifest.id));
+  let mutationQueue: Promise<unknown> = Promise.resolve();
+
+  function enqueueMutation<T>(mutation: () => Promise<T>): Promise<T> {
+    const result = mutationQueue.then(mutation, mutation);
+    mutationQueue = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
+  }
 
   async function readState(): Promise<PersistedPluginState> {
     try {
       const raw = await readFile(statePath, "utf8");
       return normalizeState(JSON.parse(raw), manifests);
     } catch (caught) {
-      if (caught instanceof Error && "code" in caught && caught.code === "ENOENT") {
+      const isMissing = caught instanceof Error && "code" in caught && caught.code === "ENOENT";
+      const isCorrupt = caught instanceof SyntaxError;
+      if (isMissing || isCorrupt) {
         return emptyState;
       }
       throw caught;
@@ -90,19 +102,22 @@ export function createPluginStore(
         throw new Error(`Unknown plugin: ${pluginId}`);
       }
 
-      const state = await readState();
-      const enabledIds = new Set(state.enabledPluginIds);
-      if (enabled) {
-        enabledIds.add(pluginId);
-      } else {
-        enabledIds.delete(pluginId);
-      }
+      return enqueueMutation(async () => {
+        const state = await readState();
+        const enabledIds = new Set(state.enabledPluginIds);
+        if (enabled) {
+          enabledIds.add(pluginId);
+        } else {
+          enabledIds.delete(pluginId);
+        }
 
-      await writeState({
-        enabledPluginIds: sortEnabledIds([...enabledIds], manifests)
+        const enabledPluginIds = sortEnabledIds([...enabledIds], manifests);
+        await writeState({
+          enabledPluginIds
+        });
+
+        return buildPluginDescriptors(enabledPluginIds, manifests);
       });
-
-      return buildPluginDescriptors([...enabledIds], manifests);
     }
   };
 }

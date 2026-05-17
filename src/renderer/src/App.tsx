@@ -825,10 +825,7 @@ export function App(): ReactElement {
           <>
         <section
           className="panel metadata-panel"
-          id="document-section"
-          tabIndex={-1}
           aria-labelledby="metadata-heading"
-          onFocus={() => setActiveNavTarget("document")}
         >
           <div className="section-heading">
             <h2 id="metadata-heading">문서 기본정보</h2>
@@ -888,7 +885,7 @@ export function App(): ReactElement {
           </details>
         </section>
 
-        <section className="panel editor-panel" aria-labelledby="editor-heading" onFocus={() => setActiveNavTarget("document")}>
+        <section className="panel editor-panel" aria-labelledby="editor-heading">
           <div className="section-heading">
             <h2 id="editor-heading">암호화 본문 작성</h2>
             <div className="mode-toggle editor-mode-toggle" aria-label="본문 작성 모드">
@@ -1106,10 +1103,7 @@ export function App(): ReactElement {
         {activeNavTarget === "security" && (
         <section
           className="panel security-panel"
-          id="security-section"
-          tabIndex={-1}
           aria-labelledby="security-heading"
-          onFocus={() => setActiveNavTarget("security")}
         >
           <div className="section-heading">
             <h2 id="security-heading">보안 정책</h2>
@@ -1138,10 +1132,7 @@ export function App(): ReactElement {
         {activeNavTarget === "history" && (
         <section
           className="panel history-panel"
-          id="history-section"
-          tabIndex={-1}
           aria-labelledby="history-heading"
-          onFocus={() => setActiveNavTarget("history")}
         >
           <div className="section-heading">
             <h2 id="history-heading">발행 이력</h2>
@@ -1189,10 +1180,7 @@ export function App(): ReactElement {
         {activeNavTarget === "plugins" && (
         <section
           className="panel plugins-panel"
-          id="plugins-section"
-          tabIndex={-1}
           aria-labelledby="plugins-heading"
-          onFocus={() => setActiveNavTarget("plugins")}
         >
           <div className="section-heading">
             <h2 id="plugins-heading">플러그인</h2>

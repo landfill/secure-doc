@@ -209,11 +209,6 @@ button.primary {
   grid-column: 1;
 }
 
-.panel:focus {
-  outline: 3px solid var(--accent-focus);
-  outline-offset: 2px;
-}
-
 .section-heading {
   display: flex;
   align-items: center;
