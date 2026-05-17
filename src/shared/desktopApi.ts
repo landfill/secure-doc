@@ -1,4 +1,4 @@
-import type { PluginContributions, PluginDescriptor } from "./plugins";
+import type { PluginContributions, PluginDescriptor, SmtpDeliveryPluginId } from "./plugins";
 
 export interface PublishHistoryRecord {
   documentId: string;
@@ -28,10 +28,14 @@ export interface SavePackageResult {
 }
 
 export interface SmtpSettingsView {
-  pluginId: "delivery.smtp.gmail";
+  pluginId: SmtpDeliveryPluginId;
   host: string;
   port: number;
   senderEmail: string;
+  username: string;
+  secure: boolean;
+  requireTLS: boolean;
+  hasPassword: boolean;
   hasAppPassword: boolean;
 }
 
@@ -39,6 +43,10 @@ export interface SaveSmtpSettingsRequest {
   host: string;
   port: number;
   senderEmail: string;
+  username?: string;
+  secure?: boolean;
+  requireTLS?: boolean;
+  password?: string;
   appPassword?: string;
 }
 

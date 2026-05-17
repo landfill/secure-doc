@@ -5,23 +5,43 @@ import type {
   PluginActionResult,
   SaveSmtpSettingsRequest,
   SendSmtpEmailRequest,
-  SendSmtpHistoryEmailRequest,
   SendSmtpEmailResult,
+  SendSmtpHistoryEmailRequest,
   SmtpConnectionTestResult,
   SmtpSettingsView
 } from "../shared/desktopApi.ts";
 import {
+  GENERIC_SMTP_HISTORY_SEND_ACTION_ID,
+  GENERIC_SMTP_PLUGIN_ID,
+  GENERIC_SMTP_SEND_ACTION_ID,
+  GENERIC_SMTP_TEST_ACTION_ID,
   GMAIL_SMTP_HISTORY_SEND_ACTION_ID,
   GMAIL_SMTP_PLUGIN_ID,
   GMAIL_SMTP_SEND_ACTION_ID,
-  GMAIL_SMTP_TEST_ACTION_ID
+  GMAIL_SMTP_TEST_ACTION_ID,
+  isSmtpDeliveryPluginId,
+  type SmtpDeliveryPluginId
 } from "../shared/plugins.ts";
+import { normalizeDeliveryPackagePayload } from "./deliveryPlugin.ts";
 
 interface PersistedSmtpSettings {
   host: string;
   port: number;
   senderEmail: string;
-  encryptedAppPassword?: string;
+  username: string;
+  secure: boolean;
+  requireTLS: boolean;
+  encryptedPassword?: string;
+}
+
+interface NormalizedSaveSmtpSettingsRequest {
+  host: string;
+  port: number;
+  senderEmail: string;
+  username: string;
+  secure: boolean;
+  requireTLS: boolean;
+  password?: string;
 }
 
 interface SmtpTransportOptions {
@@ -29,6 +49,7 @@ interface SmtpTransportOptions {
   port: number;
   secure: boolean;
   requireTLS: boolean;
+  allowInternalNetworkInterfaces?: boolean;
   auth: {
     user: string;
     pass: string;
@@ -59,6 +80,15 @@ interface SmtpTransportContext {
   transport: SmtpTransport;
 }
 
+interface SmtpPluginDefinition {
+  id: SmtpDeliveryPluginId;
+  defaultHost: string;
+  defaultPort: number;
+  defaultSecure: boolean;
+  defaultRequireTLS: boolean;
+  incompleteSettingsMessage: string;
+}
+
 export interface SmtpTransport {
   verify(): Promise<unknown>;
   sendMail(options: SmtpMailOptions): Promise<{ messageId?: string }>;
@@ -70,7 +100,7 @@ export interface SmtpSecretCodec {
   decryptString(value: Buffer): string;
 }
 
-export interface GmailSmtpPluginServiceOptions {
+export interface SmtpPluginServiceOptions {
   userDataPath: string;
   secretCodec: SmtpSecretCodec;
   isPluginEnabled(pluginId: string): Promise<boolean>;
@@ -78,27 +108,47 @@ export interface GmailSmtpPluginServiceOptions {
   createTransport?: (options: SmtpTransportOptions) => SmtpTransport;
 }
 
-export interface GmailSmtpPluginService {
+export type GmailSmtpPluginServiceOptions = SmtpPluginServiceOptions;
+
+export interface SmtpPluginService {
   getSettings(pluginId: string): Promise<SmtpSettingsView>;
   saveSettings(pluginId: string, values: unknown): Promise<SmtpSettingsView>;
   clearSettings(pluginId: string): Promise<SmtpSettingsView>;
   runAction(pluginId: string, actionId: string, payload?: unknown): Promise<PluginActionResult>;
 }
 
-const defaultHost = "smtp.gmail.com";
-const defaultPort = 587;
-const settingsFileName = `${GMAIL_SMTP_PLUGIN_ID}.json`;
+export type GmailSmtpPluginService = SmtpPluginService;
 
-const emptySettingsView: SmtpSettingsView = {
-  pluginId: GMAIL_SMTP_PLUGIN_ID,
-  host: defaultHost,
-  port: defaultPort,
-  senderEmail: "",
-  hasAppPassword: false
+const secureHtmlEmailBody = "보안 HTML 문서를 첨부했습니다. 문서 열람 PIN은 별도 채널로 전달됩니다.";
+
+const smtpPluginDefinitions: Record<SmtpDeliveryPluginId, SmtpPluginDefinition> = {
+  [GMAIL_SMTP_PLUGIN_ID]: {
+    id: GMAIL_SMTP_PLUGIN_ID,
+    defaultHost: "smtp.gmail.com",
+    defaultPort: 587,
+    defaultSecure: false,
+    defaultRequireTLS: true,
+    incompleteSettingsMessage: "SMTP 설정이 완전하지 않습니다. Gmail 계정과 앱 비밀번호를 먼저 저장하세요."
+  },
+  [GENERIC_SMTP_PLUGIN_ID]: {
+    id: GENERIC_SMTP_PLUGIN_ID,
+    defaultHost: "",
+    defaultPort: 587,
+    defaultSecure: false,
+    defaultRequireTLS: true,
+    incompleteSettingsMessage: "SMTP 설정이 완전하지 않습니다. SMTP 계정과 비밀번호를 먼저 저장하세요."
+  }
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function definitionFor(pluginId: string): SmtpPluginDefinition {
+  if (!isSmtpDeliveryPluginId(pluginId)) {
+    throw new Error(`Unknown plugin: ${pluginId}`);
+  }
+  return smtpPluginDefinitions[pluginId];
 }
 
 export function normalizeSmtpAppPassword(value: string): string {
@@ -107,7 +157,7 @@ export function normalizeSmtpAppPassword(value: string): string {
 
 export function normalizeSmtpHost(value: unknown): string {
   if (typeof value !== "string") {
-    throw new Error("SMTP host must be a hostname.");
+    throw new Error("SMTP 호스트는 호스트 이름이어야 합니다.");
   }
 
   const host = value.normalize("NFKC").trim().toLowerCase();
@@ -119,39 +169,72 @@ export function normalizeSmtpHost(value: unknown): string {
     host.endsWith(".") ||
     host.includes("..")
   ) {
-    throw new Error("SMTP host must be a hostname.");
+    throw new Error("SMTP 호스트는 호스트 이름이어야 합니다.");
   }
 
   return host;
 }
 
-export function normalizeSmtpPort(value: unknown): number {
+export function normalizeSmtpPort(value: unknown, pluginId: SmtpDeliveryPluginId = GMAIL_SMTP_PLUGIN_ID): number {
   const port = typeof value === "number" ? value : Number(value);
-  if (port !== 587) {
-    throw new Error("Gmail SMTP port must be 587 for STARTTLS.");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("SMTP 포트는 1에서 65535 사이여야 합니다.");
+  }
+  if (pluginId === GMAIL_SMTP_PLUGIN_ID && port !== 587) {
+    throw new Error("Gmail SMTP 포트는 STARTTLS용 587이어야 합니다.");
   }
   return port;
 }
 
 export function normalizeSmtpEmail(value: unknown, fieldLabel = "Email address"): string {
   if (typeof value !== "string") {
-    throw new Error(`${fieldLabel} is required.`);
+    throw new Error(`${fieldLabel}이 필요합니다.`);
   }
 
   const email = value.normalize("NFKC").trim();
   if (!email || email.length > 254 || /\s/.test(email) || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
-    throw new Error(`${fieldLabel} must be a valid email address.`);
+    throw new Error(`${fieldLabel}은 올바른 이메일 주소여야 합니다.`);
   }
 
   return email;
 }
 
+function normalizeSmtpUsername(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new Error("SMTP 사용자 이름이 필요합니다.");
+  }
+
+  const username = value.normalize("NFKC").trim();
+  if (!username || username.length > 254 || /[\u0000-\u001f\u007f]/.test(username)) {
+    throw new Error("SMTP 사용자 이름이 필요합니다.");
+  }
+
+  return username;
+}
+
+function normalizeBoolean(value: unknown, fallback: boolean, fieldLabel: string): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (typeof value !== "boolean") {
+    throw new Error(`${fieldLabel} 값은 true 또는 false여야 합니다.`);
+  }
+  return value;
+}
+
 export function validateSmtpAppPassword(value: string): string {
   const appPassword = normalizeSmtpAppPassword(value);
   if (appPassword.length !== 16) {
-    throw new Error("Gmail app password must be 16 characters after removing spaces.");
+    throw new Error("Gmail 앱 비밀번호는 공백 제거 후 16자여야 합니다.");
   }
   return appPassword;
+}
+
+function validateGenericSmtpPassword(value: string): string {
+  if (!value.trim() || value.length > 1024) {
+    throw new Error("SMTP 비밀번호가 필요합니다.");
+  }
+  return value;
 }
 
 export function toSafeSmtpError(caught: unknown): string {
@@ -159,97 +242,127 @@ export function toSafeSmtpError(caught: unknown): string {
   const responseCode = isRecord(caught) && typeof caught.responseCode === "number" ? caught.responseCode : 0;
 
   if (responseCode === 534 || responseCode === 535 || code === "EAUTH") {
-    return "SMTP authentication failed. Check the Gmail account and app password.";
+    return "SMTP 인증에 실패했습니다. 계정과 비밀번호를 확인하세요.";
   }
 
   if (["ECONNECTION", "ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "ETIMEDOUT", "ESOCKET"].includes(code)) {
-    return "SMTP network connection failed. Check the host, port, and network connection.";
+    return "SMTP 네트워크 연결에 실패했습니다. 호스트, 포트, 네트워크 연결을 확인하세요.";
   }
 
-  return "SMTP request failed. Check the Gmail SMTP settings and try again.";
+  return "SMTP 요청에 실패했습니다. 설정값을 확인하고 다시 시도하세요.";
 }
 
-function normalizePersistedSettings(value: unknown): PersistedSmtpSettings | null {
+function settingsPathFor(userDataPath: string, pluginId: SmtpDeliveryPluginId): string {
+  return join(userDataPath, "plugin-settings", `${pluginId}.json`);
+}
+
+function emptySettingsView(pluginId: SmtpDeliveryPluginId): SmtpSettingsView {
+  const definition = smtpPluginDefinitions[pluginId];
+  return {
+    pluginId,
+    host: definition.defaultHost,
+    port: definition.defaultPort,
+    senderEmail: "",
+    username: "",
+    secure: definition.defaultSecure,
+    requireTLS: definition.defaultRequireTLS,
+    hasPassword: false,
+    hasAppPassword: false
+  };
+}
+
+function normalizePersistedSettings(pluginId: SmtpDeliveryPluginId, value: unknown): PersistedSmtpSettings | null {
   if (!isRecord(value)) {
     return null;
   }
 
   try {
-    const encryptedAppPassword =
-      typeof value.encryptedAppPassword === "string" && value.encryptedAppPassword.trim()
-        ? value.encryptedAppPassword
-        : undefined;
+    const encryptedPassword =
+      typeof value.encryptedPassword === "string" && value.encryptedPassword.trim()
+        ? value.encryptedPassword
+        : typeof value.encryptedAppPassword === "string" && value.encryptedAppPassword.trim()
+          ? value.encryptedAppPassword
+          : undefined;
+    const senderEmail = normalizeSmtpEmail(value.senderEmail, "Sender email");
+    const secure = pluginId === GMAIL_SMTP_PLUGIN_ID ? false : normalizeBoolean(value.secure, false, "SMTP secure mode");
     return {
       host: normalizeSmtpHost(value.host),
-      port: normalizeSmtpPort(value.port),
-      senderEmail: normalizeSmtpEmail(value.senderEmail, "Sender email"),
-      encryptedAppPassword
+      port: normalizeSmtpPort(value.port, pluginId),
+      senderEmail,
+      username: pluginId === GMAIL_SMTP_PLUGIN_ID ? senderEmail : normalizeSmtpUsername(value.username ?? senderEmail),
+      secure,
+      requireTLS: pluginId === GMAIL_SMTP_PLUGIN_ID ? true : normalizeBoolean(value.requireTLS, !secure, "SMTP STARTTLS mode"),
+      encryptedPassword
     };
   } catch {
     return null;
   }
 }
 
-function toSettingsView(settings: PersistedSmtpSettings | null): SmtpSettingsView {
+function toSettingsView(pluginId: SmtpDeliveryPluginId, settings: PersistedSmtpSettings | null): SmtpSettingsView {
   if (!settings) {
-    return emptySettingsView;
+    return emptySettingsView(pluginId);
   }
 
+  const hasPassword = Boolean(settings.encryptedPassword);
   return {
-    pluginId: GMAIL_SMTP_PLUGIN_ID,
+    pluginId,
     host: settings.host,
     port: settings.port,
     senderEmail: settings.senderEmail,
-    hasAppPassword: Boolean(settings.encryptedAppPassword)
+    username: settings.username,
+    secure: settings.secure,
+    requireTLS: settings.requireTLS,
+    hasPassword,
+    hasAppPassword: hasPassword
   };
 }
 
-function assertKnownPlugin(pluginId: string): void {
-  if (pluginId !== GMAIL_SMTP_PLUGIN_ID) {
-    throw new Error(`Unknown plugin: ${pluginId}`);
-  }
-}
-
-function normalizeSaveRequest(values: unknown): SaveSmtpSettingsRequest {
+function normalizeSaveRequest(pluginId: SmtpDeliveryPluginId, values: unknown): NormalizedSaveSmtpSettingsRequest {
   if (!isRecord(values)) {
     throw new Error("SMTP settings are required.");
   }
 
-  const appPassword = typeof values.appPassword === "string" ? values.appPassword : undefined;
+  const senderEmail = normalizeSmtpEmail(values.senderEmail, "Sender email");
+  const secure = pluginId === GMAIL_SMTP_PLUGIN_ID ? false : normalizeBoolean(values.secure, false, "SMTP secure mode");
+  const secretValue =
+    typeof values.password === "string"
+      ? values.password
+      : typeof values.appPassword === "string"
+        ? values.appPassword
+        : undefined;
+
+  let password: string | undefined;
+  if (typeof secretValue === "string" && secretValue.trim().length > 0) {
+    password = pluginId === GMAIL_SMTP_PLUGIN_ID ? validateSmtpAppPassword(secretValue) : validateGenericSmtpPassword(secretValue);
+  }
+
   return {
     host: normalizeSmtpHost(values.host),
-    port: normalizeSmtpPort(values.port),
-    senderEmail: normalizeSmtpEmail(values.senderEmail, "Sender email"),
-    appPassword
+    port: normalizeSmtpPort(values.port, pluginId),
+    senderEmail,
+    username: pluginId === GMAIL_SMTP_PLUGIN_ID ? senderEmail : normalizeSmtpUsername(values.username ?? senderEmail),
+    secure,
+    requireTLS: pluginId === GMAIL_SMTP_PLUGIN_ID ? true : normalizeBoolean(values.requireTLS, !secure, "SMTP STARTTLS mode"),
+    password
   };
 }
 
 function normalizeSendRequest(payload: unknown): SendSmtpEmailRequest {
+  const deliveryPayload = normalizeDeliveryPackagePayload(payload);
   if (!isRecord(payload)) {
-    throw new Error("Email send request is required.");
+    throw new Error("이메일 발송 요청이 필요합니다.");
   }
 
-  const documentId = typeof payload.documentId === "string" ? payload.documentId.trim() : "";
-  const outputPath = typeof payload.outputPath === "string" ? payload.outputPath.trim() : "";
-  const attachmentFileName = typeof payload.attachmentFileName === "string" ? payload.attachmentFileName.trim() : "";
   const subject = typeof payload.subject === "string" ? payload.subject.normalize("NFKC").trim() : "";
-
-  if (!documentId || !outputPath) {
-    throw new Error("Saved secure package is required.");
-  }
-  if (!attachmentFileName.endsWith(".html")) {
-    throw new Error("Attachment file name must end with .html.");
-  }
   if (!subject) {
-    throw new Error("Email subject is required.");
+    throw new Error("이메일 제목이 필요합니다.");
   }
 
   return {
-    documentId,
-    outputPath,
+    ...deliveryPayload,
     recipientEmail: normalizeSmtpEmail(payload.recipientEmail, "Recipient email"),
-    subject,
-    attachmentFileName
+    subject
   };
 }
 
@@ -261,14 +374,13 @@ function createDefaultTransport(options: SmtpTransportOptions): SmtpTransport {
   return nodemailer.createTransport(options) as SmtpTransport;
 }
 
-export function createGmailSmtpPluginService({
+export function createSmtpDeliveryPluginService({
   userDataPath,
   secretCodec,
   isPluginEnabled,
   readHistoryAttachment,
   createTransport = createDefaultTransport
-}: GmailSmtpPluginServiceOptions): GmailSmtpPluginService {
-  const settingsPath = join(userDataPath, "plugin-settings", settingsFileName);
+}: SmtpPluginServiceOptions): SmtpPluginService {
   let mutationQueue: Promise<unknown> = Promise.resolve();
 
   function enqueueMutation<T>(mutation: () => Promise<T>): Promise<T> {
@@ -280,10 +392,10 @@ export function createGmailSmtpPluginService({
     return result;
   }
 
-  async function readSettings(): Promise<PersistedSmtpSettings | null> {
+  async function readSettings(pluginId: SmtpDeliveryPluginId): Promise<PersistedSmtpSettings | null> {
     try {
-      const raw = await readFile(settingsPath, "utf8");
-      return normalizePersistedSettings(JSON.parse(raw));
+      const raw = await readFile(settingsPathFor(userDataPath, pluginId), "utf8");
+      return normalizePersistedSettings(pluginId, JSON.parse(raw));
     } catch (caught) {
       const isMissing = caught instanceof Error && "code" in caught && caught.code === "ENOENT";
       const isCorrupt = caught instanceof SyntaxError;
@@ -294,59 +406,79 @@ export function createGmailSmtpPluginService({
     }
   }
 
-  async function writeSettings(settings: PersistedSmtpSettings): Promise<void> {
+  async function writeSettings(pluginId: SmtpDeliveryPluginId, settings: PersistedSmtpSettings): Promise<void> {
+    const settingsPath = settingsPathFor(userDataPath, pluginId);
     const tempPath = `${settingsPath}.tmp`;
+    const persistedSettings = {
+      host: settings.host,
+      port: settings.port,
+      senderEmail: settings.senderEmail,
+      username: settings.username,
+      secure: settings.secure,
+      requireTLS: settings.requireTLS,
+      encryptedPassword: settings.encryptedPassword
+    };
     await mkdir(dirname(settingsPath), { recursive: true });
-    await writeFile(tempPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+    await writeFile(tempPath, `${JSON.stringify(persistedSettings, null, 2)}\n`, "utf8");
     await rename(tempPath, settingsPath);
   }
 
-  async function loadCredentials(): Promise<PersistedSmtpSettings & { appPassword: string }> {
-    const settings = await readSettings();
-    if (!settings?.senderEmail || !settings.encryptedAppPassword) {
-      throw new Error("SMTP settings are incomplete. Save the Gmail account and app password first.");
+  async function loadCredentials(pluginId: SmtpDeliveryPluginId): Promise<PersistedSmtpSettings & { password: string }> {
+    const definition = smtpPluginDefinitions[pluginId];
+    const settings = await readSettings(pluginId);
+    if (!settings?.senderEmail || !settings.username || !settings.encryptedPassword) {
+      throw new Error(definition.incompleteSettingsMessage);
     }
 
     try {
-      const appPassword = secretCodec.decryptString(Buffer.from(settings.encryptedAppPassword, "base64"));
+      const password = secretCodec.decryptString(Buffer.from(settings.encryptedPassword, "base64"));
       return {
         ...settings,
-        appPassword
+        password
       };
     } catch {
-      throw new Error("SMTP app password is unavailable. Save settings again.");
+      throw new Error("SMTP 비밀번호를 사용할 수 없습니다. 설정을 다시 저장하세요.");
     }
   }
 
-  async function createTransportContext(): Promise<SmtpTransportContext> {
-    const settings = await loadCredentials();
+  async function createTransportContext(pluginId: SmtpDeliveryPluginId): Promise<SmtpTransportContext> {
+    const settings = await loadCredentials(pluginId);
+    const transportOptions: SmtpTransportOptions = {
+      host: settings.host,
+      port: settings.port,
+      secure: settings.secure,
+      requireTLS: settings.requireTLS,
+      auth: {
+        user: settings.username,
+        pass: settings.password
+      }
+    };
+
+    if (pluginId === GENERIC_SMTP_PLUGIN_ID) {
+      transportOptions.allowInternalNetworkInterfaces = true;
+    }
+
     return {
       senderEmail: settings.senderEmail,
-      transport: createTransport({
-        host: settings.host,
-        port: settings.port,
-        secure: false,
-        requireTLS: true,
-        auth: {
-          user: settings.senderEmail,
-          pass: settings.appPassword
-        }
-      })
+      transport: createTransport(transportOptions)
     };
   }
 
-  async function createConfiguredTransport(): Promise<SmtpTransport> {
-    return (await createTransportContext()).transport;
+  async function createConfiguredTransport(pluginId: SmtpDeliveryPluginId): Promise<SmtpTransport> {
+    return (await createTransportContext(pluginId)).transport;
   }
 
-  async function sendSecureHtmlEmail(request: PreparedSmtpEmailRequest): Promise<SendSmtpEmailResult> {
+  async function sendSecureHtmlEmail(
+    pluginId: SmtpDeliveryPluginId,
+    request: PreparedSmtpEmailRequest
+  ): Promise<SendSmtpEmailResult> {
     try {
-      const { senderEmail, transport } = await createTransportContext();
+      const { senderEmail, transport } = await createTransportContext(pluginId);
       const sent = await transport.sendMail({
         from: senderEmail,
         to: request.recipientEmail,
         subject: request.subject,
-        text: "보안 HTML 문서를 첨부했습니다. 문서 열람 PIN은 별도 채널로 전달됩니다.",
+        text: secureHtmlEmailBody,
         attachments: [
           {
             filename: request.attachmentFileName,
@@ -364,13 +496,16 @@ export function createGmailSmtpPluginService({
     }
   }
 
-  async function sendVerifiedHistoryEmail(request: SendSmtpEmailRequest): Promise<SendSmtpEmailResult> {
+  async function sendVerifiedHistoryEmail(
+    pluginId: SmtpDeliveryPluginId,
+    request: SendSmtpEmailRequest
+  ): Promise<SendSmtpEmailResult> {
     if (!readHistoryAttachment) {
-      throw new Error("Publish history email delivery is not available.");
+      throw new Error("발행 이력 이메일 발송을 사용할 수 없습니다.");
     }
 
     const attachmentHtml = await readHistoryAttachment(request);
-    return sendSecureHtmlEmail({
+    return sendSecureHtmlEmail(pluginId, {
       recipientEmail: request.recipientEmail,
       subject: request.subject,
       attachmentFileName: request.attachmentFileName,
@@ -378,60 +513,61 @@ export function createGmailSmtpPluginService({
     });
   }
 
-  async function assertEnabled(): Promise<void> {
-    if (!(await isPluginEnabled(GMAIL_SMTP_PLUGIN_ID))) {
-      throw new Error("SMTP plugin is disabled.");
+  async function assertEnabled(pluginId: SmtpDeliveryPluginId): Promise<void> {
+    if (!(await isPluginEnabled(pluginId))) {
+      throw new Error("SMTP 플러그인이 비활성화되어 있습니다.");
     }
   }
 
   return {
     async getSettings(pluginId) {
-      assertKnownPlugin(pluginId);
-      return toSettingsView(await readSettings());
+      const definition = definitionFor(pluginId);
+      return toSettingsView(definition.id, await readSettings(definition.id));
     },
 
     async saveSettings(pluginId, values) {
-      assertKnownPlugin(pluginId);
+      const definition = definitionFor(pluginId);
       return enqueueMutation(async () => {
-        const request = normalizeSaveRequest(values);
-        const current = await readSettings();
-        const hasNewPassword = typeof request.appPassword === "string" && request.appPassword.trim().length > 0;
-        let encryptedAppPassword = current?.encryptedAppPassword;
+        const request = normalizeSaveRequest(definition.id, values);
+        const current = await readSettings(definition.id);
+        let encryptedPassword = current?.encryptedPassword;
 
-        if (hasNewPassword) {
+        if (typeof request.password === "string") {
           if (!secretCodec.isEncryptionAvailable()) {
             throw new Error("Secure credential storage is not available on this device.");
           }
-          const appPassword = validateSmtpAppPassword(request.appPassword ?? "");
-          encryptedAppPassword = secretCodec.encryptString(appPassword).toString("base64");
+          encryptedPassword = secretCodec.encryptString(request.password).toString("base64");
         }
 
         const nextSettings: PersistedSmtpSettings = {
           host: request.host,
           port: request.port,
           senderEmail: request.senderEmail,
-          encryptedAppPassword
+          username: request.username,
+          secure: request.secure,
+          requireTLS: request.requireTLS,
+          encryptedPassword
         };
-        await writeSettings(nextSettings);
-        return toSettingsView(nextSettings);
+        await writeSettings(definition.id, nextSettings);
+        return toSettingsView(definition.id, nextSettings);
       });
     },
 
     async clearSettings(pluginId) {
-      assertKnownPlugin(pluginId);
+      const definition = definitionFor(pluginId);
       return enqueueMutation(async () => {
-        await rm(settingsPath, { force: true });
-        return emptySettingsView;
+        await rm(settingsPathFor(userDataPath, definition.id), { force: true });
+        return emptySettingsView(definition.id);
       });
     },
 
     async runAction(pluginId, actionId, payload) {
-      assertKnownPlugin(pluginId);
-      await assertEnabled();
+      const definition = definitionFor(pluginId);
+      await assertEnabled(definition.id);
 
-      if (actionId === GMAIL_SMTP_TEST_ACTION_ID) {
+      if (actionId === GMAIL_SMTP_TEST_ACTION_ID || actionId === GENERIC_SMTP_TEST_ACTION_ID) {
         try {
-          await (await createConfiguredTransport()).verify();
+          await (await createConfiguredTransport(definition.id)).verify();
           const result: SmtpConnectionTestResult = { ok: true };
           return result;
         } catch (caught) {
@@ -439,17 +575,21 @@ export function createGmailSmtpPluginService({
         }
       }
 
-      if (actionId === GMAIL_SMTP_SEND_ACTION_ID) {
+      if (actionId === GMAIL_SMTP_SEND_ACTION_ID || actionId === GENERIC_SMTP_SEND_ACTION_ID) {
         const request = normalizeSendRequest(payload);
-        return sendVerifiedHistoryEmail(request);
+        return sendVerifiedHistoryEmail(definition.id, request);
       }
 
-      if (actionId === GMAIL_SMTP_HISTORY_SEND_ACTION_ID) {
+      if (actionId === GMAIL_SMTP_HISTORY_SEND_ACTION_ID || actionId === GENERIC_SMTP_HISTORY_SEND_ACTION_ID) {
         const historyRequest = normalizeHistorySendRequest(payload);
-        return sendVerifiedHistoryEmail(historyRequest);
+        return sendVerifiedHistoryEmail(definition.id, historyRequest);
       }
 
       throw new Error(`Unknown plugin action: ${actionId}`);
     }
   };
+}
+
+export function createGmailSmtpPluginService(options: GmailSmtpPluginServiceOptions): GmailSmtpPluginService {
+  return createSmtpDeliveryPluginService(options);
 }

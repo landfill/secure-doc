@@ -10,6 +10,10 @@ import {
   type SmtpTransport
 } from "../src/main/smtpPlugin.ts";
 import {
+  GENERIC_SMTP_HISTORY_SEND_ACTION_ID,
+  GENERIC_SMTP_PLUGIN_ID,
+  GENERIC_SMTP_SEND_ACTION_ID,
+  GENERIC_SMTP_TEST_ACTION_ID,
   GMAIL_SMTP_HISTORY_SEND_ACTION_ID,
   GMAIL_SMTP_PLUGIN_ID,
   GMAIL_SMTP_SEND_ACTION_ID,
@@ -62,7 +66,7 @@ test("SMTP settings are validated and stored without exposing the raw app passwo
           senderEmail: "sender@gmail.com",
           appPassword: "abcd efgh ijkl mnop"
         }),
-      /SMTP host/
+      /SMTP 호스트/
     );
     await assert.rejects(
       () =>
@@ -72,7 +76,7 @@ test("SMTP settings are validated and stored without exposing the raw app passwo
           senderEmail: "sender@gmail.com",
           appPassword: "abcd efgh ijkl mnop"
         }),
-      /SMTP port/
+      /SMTP 포트/
     );
     await assert.rejects(
       () =>
@@ -102,7 +106,7 @@ test("SMTP settings are validated and stored without exposing the raw app passwo
           senderEmail: "sender@gmail.com",
           appPassword: "short"
         }),
-      /16 characters/
+      /16자/
     );
 
     const view = await service.saveSettings(GMAIL_SMTP_PLUGIN_ID, {
@@ -117,6 +121,10 @@ test("SMTP settings are validated and stored without exposing the raw app passwo
       host: "smtp.gmail.com",
       port: 587,
       senderEmail: "sender@gmail.com",
+      username: "sender@gmail.com",
+      secure: false,
+      requireTLS: true,
+      hasPassword: true,
       hasAppPassword: true
     });
     assert.equal("appPassword" in view, false);
@@ -166,7 +174,7 @@ test("SMTP actions verify and send through the injected transport only when enab
       appPassword: "abcd efgh ijkl mnop"
     });
 
-    await assert.rejects(() => service.runAction(GMAIL_SMTP_PLUGIN_ID, GMAIL_SMTP_TEST_ACTION_ID), /disabled/);
+    await assert.rejects(() => service.runAction(GMAIL_SMTP_PLUGIN_ID, GMAIL_SMTP_TEST_ACTION_ID), /비활성화/);
 
     enabled = true;
     assert.deepEqual(await service.runAction(GMAIL_SMTP_PLUGIN_ID, GMAIL_SMTP_TEST_ACTION_ID), { ok: true });
@@ -267,6 +275,154 @@ test("SMTP history action reads a validated history attachment before sending", 
   });
 });
 
+test("generic SMTP settings store encrypted credentials and send through configured transport", async () => {
+  await withTempUserData(async (userDataPath) => {
+    const transportOptions: unknown[] = [];
+    const historyRequests: unknown[] = [];
+    const sentMessages: unknown[] = [];
+    const service = createGmailSmtpPluginService({
+      userDataPath,
+      secretCodec: fakeSecretCodec,
+      isPluginEnabled: async (pluginId) => pluginId === GENERIC_SMTP_PLUGIN_ID,
+      async readHistoryAttachment(request) {
+        historyRequests.push(request);
+        assert.equal(request.documentId, "doc-2");
+        assert.equal(request.outputPath, "C:\\secure\\doc-2.html");
+        return "<!doctype html><title>Generic SMTP package</title>";
+      },
+      createTransport(options): SmtpTransport {
+        transportOptions.push(options);
+        return {
+          async verify() {},
+          async sendMail(message) {
+            sentMessages.push(message);
+            return { messageId: "generic-message-1" };
+          }
+        };
+      }
+    });
+
+    const view = await service.saveSettings(GENERIC_SMTP_PLUGIN_ID, {
+      host: "MAIL.EXAMPLE.INTERNAL",
+      port: 2525,
+      senderEmail: "sender@example.com",
+      username: "smtp-user",
+      password: "smtp secret 123",
+      secure: false,
+      requireTLS: true
+    });
+
+    assert.deepEqual(view, {
+      pluginId: GENERIC_SMTP_PLUGIN_ID,
+      host: "mail.example.internal",
+      port: 2525,
+      senderEmail: "sender@example.com",
+      username: "smtp-user",
+      secure: false,
+      requireTLS: true,
+      hasPassword: true,
+      hasAppPassword: true
+    });
+
+    const raw = await readFile(join(userDataPath, "plugin-settings", `${GENERIC_SMTP_PLUGIN_ID}.json`), "utf8");
+    assert.equal(raw.includes("smtp secret 123"), false);
+    assert.equal(raw.includes("smtp-user"), true);
+
+    assert.deepEqual(await service.runAction(GENERIC_SMTP_PLUGIN_ID, GENERIC_SMTP_TEST_ACTION_ID), { ok: true });
+    const result = await service.runAction(GENERIC_SMTP_PLUGIN_ID, GENERIC_SMTP_HISTORY_SEND_ACTION_ID, {
+      documentId: "doc-2",
+      outputPath: "C:\\secure\\doc-2.html",
+      recipientEmail: "recipient@example.com",
+      subject: "Generic SMTP document",
+      attachmentFileName: "doc-2.html"
+    });
+
+    assert.deepEqual(result, { sent: true, messageId: "generic-message-1" });
+    assert.equal(historyRequests.length, 1);
+    assert.deepEqual(transportOptions[0], {
+      host: "mail.example.internal",
+      port: 2525,
+      secure: false,
+      requireTLS: true,
+      allowInternalNetworkInterfaces: true,
+      auth: {
+        user: "smtp-user",
+        pass: "smtp secret 123"
+      }
+    });
+    assert.deepEqual(sentMessages[0], {
+      from: "sender@example.com",
+      to: "recipient@example.com",
+      subject: "Generic SMTP document",
+      text: "보안 HTML 문서를 첨부했습니다. 문서 열람 PIN은 별도 채널로 전달됩니다.",
+      attachments: [
+        {
+          filename: "doc-2.html",
+          content: "<!doctype html><title>Generic SMTP package</title>",
+          contentType: "text/html; charset=utf-8"
+        }
+      ]
+    });
+  });
+});
+
+test("generic SMTP errors are masked without leaking credentials or package contents", async () => {
+  await withTempUserData(async (userDataPath) => {
+    const service = createGmailSmtpPluginService({
+      userDataPath,
+      secretCodec: fakeSecretCodec,
+      isPluginEnabled: async (pluginId) => pluginId === GENERIC_SMTP_PLUGIN_ID,
+      async readHistoryAttachment() {
+        return "<!doctype html><body>Plain confidential body PIN 123456 DEK dek-secret KEK kek-secret</body>";
+      },
+      createTransport(): SmtpTransport {
+        return {
+          async verify() {},
+          async sendMail() {
+            const error = new Error(
+              "SMTP failed for sender@example.com using smtp secret 123 with Plain confidential body PIN 123456 DEK dek-secret KEK kek-secret"
+            );
+            Object.assign(error, { code: "EAUTH", responseCode: 535 });
+            throw error;
+          }
+        };
+      }
+    });
+
+    await service.saveSettings(GENERIC_SMTP_PLUGIN_ID, {
+      host: "mail.example.internal",
+      port: 587,
+      senderEmail: "sender@example.com",
+      username: "smtp-user",
+      password: "smtp secret 123",
+      secure: false,
+      requireTLS: true
+    });
+
+    await assert.rejects(
+      () =>
+        service.runAction(GENERIC_SMTP_PLUGIN_ID, GENERIC_SMTP_SEND_ACTION_ID, {
+          documentId: "doc-2",
+          outputPath: "C:\\secure\\doc-2.html",
+          recipientEmail: "recipient@example.com",
+          subject: "Generic SMTP document",
+          attachmentFileName: "doc-2.html"
+        }),
+      (caught) => {
+        assert.ok(caught instanceof Error);
+        assert.match(caught.message, /SMTP 인증/);
+        assert.equal(caught.message.includes("sender@example.com"), false);
+        assert.equal(caught.message.includes("smtp secret 123"), false);
+        assert.equal(caught.message.includes("123456"), false);
+        assert.equal(caught.message.includes("dek-secret"), false);
+        assert.equal(caught.message.includes("kek-secret"), false);
+        assert.equal(caught.message.includes("Plain confidential body"), false);
+        return true;
+      }
+    );
+  });
+});
+
 test("SMTP action errors are mapped to safe messages without leaking secrets or document data", async () => {
   await withTempUserData(async (userDataPath) => {
     const service = createGmailSmtpPluginService({
@@ -300,7 +456,7 @@ test("SMTP action errors are mapped to safe messages without leaking secrets or 
       () => service.runAction(GMAIL_SMTP_PLUGIN_ID, GMAIL_SMTP_TEST_ACTION_ID),
       (caught) => {
         assert.ok(caught instanceof Error);
-        assert.match(caught.message, /authentication failed/);
+        assert.match(caught.message, /SMTP 인증/);
         assert.equal(caught.message.includes("sender@gmail.com"), false);
         assert.equal(caught.message.includes("abcdefghijklmnop"), false);
         assert.equal(caught.message.includes("123456"), false);
@@ -353,7 +509,7 @@ test("SMTP send failures are mapped to safe messages without leaking attachment 
         }),
       (caught) => {
         assert.ok(caught instanceof Error);
-        assert.match(caught.message, /SMTP request failed/);
+        assert.match(caught.message, /SMTP 요청/);
         assert.equal(caught.message.includes("sender@gmail.com"), false);
         assert.equal(caught.message.includes("abcdefghijklmnop"), false);
         assert.equal(caught.message.includes("123456"), false);

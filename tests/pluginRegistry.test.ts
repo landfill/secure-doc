@@ -6,6 +6,7 @@ import {
   PLUGIN_CONTRIBUTION_PERMISSION_REQUIREMENTS,
   PLUGIN_ID_PREFIXES_BY_CATEGORY,
   PLUGIN_PERMISSIONS,
+  GENERIC_SMTP_PLUGIN_ID,
   STRICT_PIN_POLICY_PLUGIN_ID,
   buildPluginDescriptors,
   getEnabledPluginContributions,
@@ -60,6 +61,21 @@ test("built-in plugin manifests expose stable ids, permissions, and extension po
   assert.equal(smtpPlugin.contributes.settingsPanel, true);
   assert.equal(smtpPlugin.contributes.publishActions?.[0]?.id, "send-email");
   assert.equal(smtpPlugin.contributes.historyActions?.[0]?.id, "send-email-from-history");
+
+  const genericSmtpPlugin = BUILT_IN_PLUGIN_MANIFESTS.find((plugin) => plugin.id === GENERIC_SMTP_PLUGIN_ID);
+  assert.ok(genericSmtpPlugin);
+  assert.equal(genericSmtpPlugin.category, "delivery");
+  assert.deepEqual(genericSmtpPlugin.permissions, [
+    "network:smtp",
+    "secret:safeStorage",
+    "package:read",
+    "history:read",
+    "ui:settings",
+    "ui:publish-action"
+  ]);
+  assert.equal(genericSmtpPlugin.contributes.settingsPanel, true);
+  assert.equal(genericSmtpPlugin.contributes.publishActions?.[0]?.id, "send-email");
+  assert.equal(genericSmtpPlugin.contributes.historyActions?.[0]?.id, "send-email-from-history");
 
   const auditPlugin = BUILT_IN_PLUGIN_MANIFESTS.find((plugin) => plugin.id === "audit.integrity.report");
   assert.ok(auditPlugin);
@@ -210,6 +226,12 @@ test("plugin descriptors and contributions are driven only by enabled state", ()
   assert.equal(contributions.historyActions.length, 1);
   assert.equal(contributions.historyActions[0].pluginId, "delivery.smtp.gmail");
   assert.equal(contributions.policyProfiles.length, 0);
+
+  const genericContributions = getEnabledPluginContributions([GENERIC_SMTP_PLUGIN_ID]);
+  assert.equal(genericContributions.publishActions.length, 1);
+  assert.equal(genericContributions.publishActions[0].pluginId, GENERIC_SMTP_PLUGIN_ID);
+  assert.equal(genericContributions.historyActions.length, 1);
+  assert.equal(genericContributions.historyActions[0].pluginId, GENERIC_SMTP_PLUGIN_ID);
 
   const auditContributions = getEnabledPluginContributions(["audit.integrity.report"]);
   assert.equal(auditContributions.publishActions.length, 0);

@@ -1165,16 +1165,6 @@ select:focus,
   font-weight: 600;
 }
 
-.plugin-contribution-summary {
-  margin: 0 14px 14px;
-  border-radius: 6px;
-  padding: 10px 12px;
-  color: var(--warm-fg);
-  background: var(--accent-soft);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 .smtp-settings-panel {
   margin-top: 14px;
   padding: 18px 0 4px;
@@ -1247,8 +1237,19 @@ select:focus,
 }
 
 .smtp-settings-grid input,
-.email-dialog-grid input {
+.email-dialog-grid input,
+.email-dialog-grid select {
   min-width: 0;
+}
+
+.email-dialog-grid select {
+  height: 44px;
+  border: 1px solid var(--border-control);
+  border-radius: 6px;
+  padding: 0 12px;
+  color: var(--fg);
+  background: var(--surface);
+  font-weight: 650;
 }
 
 .smtp-settings-grid input {
@@ -1257,6 +1258,36 @@ select:focus,
   background: var(--surface);
   box-shadow: inset 0 1px 2px rgba(28, 27, 26, 0.04);
   font-weight: 650;
+}
+
+.smtp-field-secret input {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  letter-spacing: 0.06em;
+}
+
+.smtp-field-secret input::placeholder {
+  color: #9b9188;
+  opacity: 1;
+}
+
+.smtp-option-field {
+  gap: 10px;
+}
+
+.smtp-option-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.smtp-settings-grid .smtp-option-row input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  box-shadow: none;
 }
 
 .field-hint {
@@ -1306,6 +1337,64 @@ select:focus,
 .smtp-command.danger-command:hover:not(:disabled) {
   border-color: var(--bad);
   background: #ffe7e2;
+}
+
+.smtp-feedback {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 8px;
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.smtp-feedback.success {
+  color: var(--good);
+  border-color: rgba(47, 125, 74, 0.28);
+  background: var(--surface-success);
+}
+
+.smtp-feedback.error {
+  color: var(--bad);
+  border-color: rgba(181, 58, 42, 0.28);
+  background: var(--surface-error);
+}
+
+.smtp-feedback-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.plugin-active-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 14px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.plugin-active-label {
+  font-weight: 800;
+}
+
+.plugin-active-chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--warm-fg);
+  background: var(--surface-warm);
+  font-weight: 700;
 }
 
 .attachment-confirm {
