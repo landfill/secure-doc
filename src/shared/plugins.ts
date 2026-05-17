@@ -171,10 +171,10 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
   },
   {
     id: GENERIC_SMTP_PLUGIN_ID,
-    name: "Generic SMTP Delivery",
+    name: "Generic SMTP 발송",
     version: "0.1.0",
     description:
-      "Sends issued secure HTML packages through a configured SMTP server after publish-history and package hash verification.",
+      "발행 이력과 패키지 해시를 검증한 뒤 설정된 SMTP 서버를 통해 보안 HTML 패키지를 전송합니다.",
     category: "delivery",
     permissions: [
       "network:smtp",
@@ -189,15 +189,15 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
       publishActions: [
         {
           id: GENERIC_SMTP_SEND_ACTION_ID,
-          label: "Send via SMTP",
-          description: "Send the just-issued secure HTML package through the configured SMTP server."
+          label: "SMTP 발송",
+          description: "방금 발행한 보안 HTML 패키지를 설정된 SMTP 서버로 전송합니다."
         }
       ],
       historyActions: [
         {
           id: GENERIC_SMTP_HISTORY_SEND_ACTION_ID,
-          label: "Send via SMTP",
-          description: "Re-send the saved secure HTML package from publish history through the configured SMTP server."
+          label: "SMTP 발송",
+          description: "발행 이력에 저장된 보안 HTML 패키지를 설정된 SMTP 서버로 다시 전송합니다."
         }
       ]
     }

@@ -119,6 +119,11 @@ type EmailSendForm = {
   attachmentFileName: string;
 };
 
+type SmtpActionSelection = {
+  pluginId: SmtpDeliveryPluginId;
+  actionId: string;
+};
+
 const textAlignments: TextAlign[] = ["left", "center", "right", "justify"];
 
 const defaultSmtpSettingsForms: Record<SmtpDeliveryPluginId, SmtpSettingsForm> = {
@@ -201,7 +206,7 @@ function pluginDisplayName(plugin: PluginDescriptor): string {
     return "Gmail SMTP 발송";
   }
   if (plugin.id === GENERIC_SMTP_PLUGIN_ID) {
-    return "Generic SMTP Delivery";
+    return "Generic SMTP 발송";
   }
   if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
     return "패키지 무결성 감사";
@@ -217,7 +222,7 @@ function pluginDisplayDescription(plugin: PluginDescriptor): string {
     return "보안 HTML 파일을 Gmail SMTP 메일에 첨부해 외부 수신자에게 보냅니다.";
   }
   if (plugin.id === GENERIC_SMTP_PLUGIN_ID) {
-    return "Send issued secure HTML packages through a configured SMTP server.";
+    return "설정된 SMTP 서버를 통해 발행된 보안 HTML 패키지를 전송합니다.";
   }
   if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
     return "저장된 보안 HTML 파일이 발행 당시 기록된 SHA-256 해시와 일치하는지 검사합니다.";
@@ -238,9 +243,9 @@ function pluginFeatureDescriptions(plugin: PluginDescriptor): string[] {
   }
   if (plugin.id === GENERIC_SMTP_PLUGIN_ID) {
     return [
-      "Configure an internal SMTP host, port, STARTTLS mode, sender address, username, and password.",
-      "The main process resolves publish history and verifies the stored package hash before delivery.",
-      "SMTP credentials and raw transport errors are never returned to the renderer."
+      "내부 SMTP 호스트, 포트, STARTTLS 모드, 발신자 주소, 사용자 이름 및 비밀번호를 설정합니다.",
+      "메인 프로세스에서 발행 이력을 확인하고 전송 전 저장된 패키지 해시를 검증합니다.",
+      "SMTP 인증 정보와 원본 전송 오류는 렌더러로 반환되지 않습니다."
     ];
   }
   if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
@@ -324,26 +329,33 @@ function smtpSettingsMapToForms(settingsById: Partial<Record<SmtpDeliveryPluginI
   };
 }
 
-function getActiveSmtpSendAction(
-  contributions: PluginContributions
-): { pluginId: SmtpDeliveryPluginId; actionId: string } | null {
-  const action = contributions.publishActions.find(
-    (candidate) =>
-      isSmtpDeliveryPluginId(candidate.pluginId) &&
-      (candidate.id === GMAIL_SMTP_SEND_ACTION_ID || candidate.id === GENERIC_SMTP_SEND_ACTION_ID)
+function getActiveSmtpSendActions(contributions: PluginContributions): SmtpActionSelection[] {
+  return contributions.publishActions.flatMap((candidate) =>
+    isSmtpDeliveryPluginId(candidate.pluginId) &&
+    (candidate.id === GMAIL_SMTP_SEND_ACTION_ID || candidate.id === GENERIC_SMTP_SEND_ACTION_ID)
+      ? [{ pluginId: candidate.pluginId, actionId: candidate.id }]
+      : []
   );
-  return action && isSmtpDeliveryPluginId(action.pluginId) ? { pluginId: action.pluginId, actionId: action.id } : null;
 }
 
-function getActiveSmtpHistorySendAction(
-  contributions: PluginContributions
-): { pluginId: SmtpDeliveryPluginId; actionId: string } | null {
-  const action = contributions.historyActions.find(
-    (candidate) =>
-      isSmtpDeliveryPluginId(candidate.pluginId) &&
-      (candidate.id === GMAIL_SMTP_HISTORY_SEND_ACTION_ID || candidate.id === GENERIC_SMTP_HISTORY_SEND_ACTION_ID)
+function getActiveSmtpHistorySendActions(contributions: PluginContributions): SmtpActionSelection[] {
+  return contributions.historyActions.flatMap((candidate) =>
+    isSmtpDeliveryPluginId(candidate.pluginId) &&
+    (candidate.id === GMAIL_SMTP_HISTORY_SEND_ACTION_ID || candidate.id === GENERIC_SMTP_HISTORY_SEND_ACTION_ID)
+      ? [{ pluginId: candidate.pluginId, actionId: candidate.id }]
+      : []
   );
-  return action && isSmtpDeliveryPluginId(action.pluginId) ? { pluginId: action.pluginId, actionId: action.id } : null;
+}
+
+function chooseSmtpAction(
+  actions: readonly SmtpActionSelection[],
+  preferredPluginId: SmtpDeliveryPluginId
+): SmtpActionSelection | null {
+  return actions.find((action) => action.pluginId === preferredPluginId) ?? actions[0] ?? null;
+}
+
+function smtpPluginLabel(pluginId: SmtpDeliveryPluginId): string {
+  return pluginId === GMAIL_SMTP_PLUGIN_ID ? "Gmail SMTP" : "Generic SMTP";
 }
 
 function smtpTestActionId(pluginId: SmtpDeliveryPluginId): string {
@@ -556,6 +568,7 @@ export function App(): ReactElement {
   const [pendingEmailPackage, setPendingEmailPackage] = useState<PendingEmailPackage | null>(null);
   const [emailSendForm, setEmailSendForm] = useState<EmailSendForm>(defaultEmailSendForm);
   const [emailBusy, setEmailBusy] = useState(false);
+  const [preferredSmtpPluginId, setPreferredSmtpPluginId] = useState<SmtpDeliveryPluginId>(GMAIL_SMTP_PLUGIN_ID);
   const [auditBusyDocumentId, setAuditBusyDocumentId] = useState<string | null>(null);
   const [auditReport, setAuditReport] = useState<AuditPackageIntegrityReport | null>(null);
   const [activeNavTarget, setActiveNavTarget] = useState<NavTarget>("document");
@@ -612,9 +625,11 @@ export function App(): ReactElement {
     () => publishPolicyResult.messages.filter((message) => message !== pinResult.message),
     [pinResult.message, publishPolicyResult.messages]
   );
-  const activeSmtpSendAction = getActiveSmtpSendAction(pluginContributions);
-  const activeSmtpHistorySendAction = getActiveSmtpHistorySendAction(pluginContributions);
-  const smtpHistorySendActionEnabled = Boolean(activeSmtpHistorySendAction);
+  const activeSmtpSendActions = getActiveSmtpSendActions(pluginContributions);
+  const activeSmtpHistorySendActions = getActiveSmtpHistorySendActions(pluginContributions);
+  const activeSmtpSendAction = chooseSmtpAction(activeSmtpSendActions, preferredSmtpPluginId);
+  const activeSmtpHistorySendAction = chooseSmtpAction(activeSmtpHistorySendActions, preferredSmtpPluginId);
+  const smtpHistorySendActionEnabled = activeSmtpHistorySendActions.length > 0;
   const auditHistoryActionEnabled = hasActiveAuditIntegrityHistoryAction(pluginContributions);
   const activeContributionBadges = [
     ...pluginContributions.publishActions.map((action) => `발행: ${action.label}`),
@@ -694,8 +709,14 @@ export function App(): ReactElement {
           setEmailDialogOpen(false);
           setPendingEmailPackage(null);
         }
+        if (preferredSmtpPluginId === plugin.id) {
+          const fallback = getActiveSmtpSendActions(nextContributions)[0]?.pluginId ?? GMAIL_SMTP_PLUGIN_ID;
+          setPreferredSmtpPluginId(fallback);
+        }
         setSmtpStatusById((current) => ({ ...current, [plugin.id]: "" }));
         setSmtpErrorById((current) => ({ ...current, [plugin.id]: "" }));
+      } else if (isSmtpDeliveryPluginId(plugin.id) && enabled) {
+        setPreferredSmtpPluginId(plugin.id);
       }
       if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID && !enabled) {
         setAuditReport(null);
@@ -1075,6 +1096,25 @@ export function App(): ReactElement {
     }));
   }
 
+  function updatePendingEmailChannel(pluginId: SmtpDeliveryPluginId): void {
+    if (!pendingEmailPackage) {
+      return;
+    }
+
+    const actions = pendingEmailPackage.source === "history" ? activeSmtpHistorySendActions : activeSmtpSendActions;
+    const nextAction = actions.find((action) => action.pluginId === pluginId);
+    if (!nextAction) {
+      return;
+    }
+
+    setPreferredSmtpPluginId(pluginId);
+    setPendingEmailPackage({
+      ...pendingEmailPackage,
+      pluginId: nextAction.pluginId,
+      actionId: nextAction.actionId
+    });
+  }
+
   function closeEmailDialog(): void {
     if (!emailBusy) {
       setEmailDialogOpen(false);
@@ -1088,6 +1128,7 @@ export function App(): ReactElement {
     }
 
     const attachmentFileName = fileNameFromPath(item.outputPath);
+    setPreferredSmtpPluginId(activeSmtpHistorySendAction.pluginId);
     setPendingEmailPackage({
       source: "history",
       pluginId: activeSmtpHistorySendAction.pluginId,
@@ -1279,6 +1320,7 @@ export function App(): ReactElement {
       setPin("");
       setPinConfirm("");
       if (activeSmtpSendAction && saveResult.filePath) {
+        setPreferredSmtpPluginId(activeSmtpSendAction.pluginId);
         setPendingEmailPackage({
           source: "publish",
           pluginId: activeSmtpSendAction.pluginId,
@@ -1850,7 +1892,7 @@ export function App(): ReactElement {
                         </div>
                         <div className="smtp-settings-grid">
                           <label className="smtp-field smtp-field-host">
-                            SMTP host
+                            SMTP 호스트
                             <input
                               value={smtpSettingsForm.host}
                               onChange={(event) => updateSmtpSettingsForm(smtpPluginId, "host", event.target.value)}
@@ -1858,7 +1900,7 @@ export function App(): ReactElement {
                             />
                           </label>
                           <label className="smtp-field smtp-field-port">
-                            SMTP port
+                            SMTP 포트
                             <input
                               value={smtpSettingsForm.port}
                               onChange={(event) => updateSmtpSettingsForm(smtpPluginId, "port", event.target.value)}
@@ -1877,25 +1919,25 @@ export function App(): ReactElement {
                           </label>
                           {smtpPluginId === GENERIC_SMTP_PLUGIN_ID && (
                             <label className="smtp-field">
-                              SMTP username
+                              SMTP 사용자 이름
                               <input
                                 value={smtpSettingsForm.username}
                                 onChange={(event) => updateSmtpSettingsForm(smtpPluginId, "username", event.target.value)}
-                                placeholder="Defaults to sender email"
+                                placeholder="미입력 시 보낸 사람 이메일 사용"
                                 autoComplete="username"
                               />
                             </label>
                           )}
                           {smtpPluginId === GENERIC_SMTP_PLUGIN_ID && (
                             <div className="smtp-field smtp-option-field">
-                              SMTP security
+                              SMTP 보안
                               <label className="smtp-option-row">
                                 <input
                                   type="checkbox"
                                   checked={smtpSettingsForm.requireTLS}
                                   onChange={(event) => updateSmtpSettingsForm(smtpPluginId, "requireTLS", event.target.checked)}
                                 />
-                                Require STARTTLS
+                                STARTTLS 필수 사용
                               </label>
                               <label className="smtp-option-row">
                                 <input
@@ -1903,7 +1945,7 @@ export function App(): ReactElement {
                                   checked={smtpSettingsForm.secure}
                                   onChange={(event) => updateSmtpSettingsForm(smtpPluginId, "secure", event.target.checked)}
                                 />
-                                Use implicit TLS
+                                Implicit TLS 사용 (Port 465 등)
                               </label>
                             </div>
                           )}
@@ -2089,6 +2131,26 @@ export function App(): ReactElement {
               저장된 보안 HTML 문서만 첨부합니다. 문서 본문 평문과 PIN은 이메일에 포함하지 않습니다.
             </p>
             <div className="publish-dialog-grid email-dialog-grid">
+              {(pendingEmailPackage.source === "history" ? activeSmtpHistorySendActions : activeSmtpSendActions).length > 1 && (
+                <label>
+                  발송 채널
+                  <select
+                    value={pendingEmailPackage.pluginId}
+                    onChange={(event) => {
+                      if (isSmtpDeliveryPluginId(event.target.value)) {
+                        updatePendingEmailChannel(event.target.value);
+                      }
+                    }}
+                    disabled={emailBusy}
+                  >
+                    {(pendingEmailPackage.source === "history" ? activeSmtpHistorySendActions : activeSmtpSendActions).map((action) => (
+                      <option value={action.pluginId} key={action.pluginId}>
+                        {smtpPluginLabel(action.pluginId)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label>
                 수신자 이메일
                 <input

@@ -1237,8 +1237,19 @@ select:focus,
 }
 
 .smtp-settings-grid input,
-.email-dialog-grid input {
+.email-dialog-grid input,
+.email-dialog-grid select {
   min-width: 0;
+}
+
+.email-dialog-grid select {
+  height: 44px;
+  border: 1px solid var(--border-control);
+  border-radius: 6px;
+  padding: 0 12px;
+  color: var(--fg);
+  background: var(--surface);
+  font-weight: 650;
 }
 
 .smtp-settings-grid input {

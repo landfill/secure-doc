@@ -118,7 +118,7 @@ export interface SmtpPluginService {
 
 export type GmailSmtpPluginService = SmtpPluginService;
 
-const secureHtmlEmailBody = "A secure HTML document is attached. Share the PIN through a separate channel.";
+const secureHtmlEmailBody = "보안 HTML 문서를 첨부했습니다. 문서 열람 PIN은 별도 채널로 전달됩니다.";
 
 const smtpPluginDefinitions: Record<SmtpDeliveryPluginId, SmtpPluginDefinition> = {
   [GMAIL_SMTP_PLUGIN_ID]: {
@@ -127,7 +127,7 @@ const smtpPluginDefinitions: Record<SmtpDeliveryPluginId, SmtpPluginDefinition> 
     defaultPort: 587,
     defaultSecure: false,
     defaultRequireTLS: true,
-    incompleteSettingsMessage: "SMTP settings are incomplete. Save the Gmail account and app password first."
+    incompleteSettingsMessage: "SMTP 설정이 완전하지 않습니다. Gmail 계정과 앱 비밀번호를 먼저 저장하세요."
   },
   [GENERIC_SMTP_PLUGIN_ID]: {
     id: GENERIC_SMTP_PLUGIN_ID,
@@ -135,7 +135,7 @@ const smtpPluginDefinitions: Record<SmtpDeliveryPluginId, SmtpPluginDefinition> 
     defaultPort: 587,
     defaultSecure: false,
     defaultRequireTLS: true,
-    incompleteSettingsMessage: "SMTP settings are incomplete. Save the SMTP account and password first."
+    incompleteSettingsMessage: "SMTP 설정이 완전하지 않습니다. SMTP 계정과 비밀번호를 먼저 저장하세요."
   }
 };
 
@@ -156,7 +156,7 @@ export function normalizeSmtpAppPassword(value: string): string {
 
 export function normalizeSmtpHost(value: unknown): string {
   if (typeof value !== "string") {
-    throw new Error("SMTP host must be a hostname.");
+    throw new Error("SMTP 호스트는 호스트 이름이어야 합니다.");
   }
 
   const host = value.normalize("NFKC").trim().toLowerCase();
@@ -168,7 +168,7 @@ export function normalizeSmtpHost(value: unknown): string {
     host.endsWith(".") ||
     host.includes("..")
   ) {
-    throw new Error("SMTP host must be a hostname.");
+    throw new Error("SMTP 호스트는 호스트 이름이어야 합니다.");
   }
 
   return host;
@@ -177,22 +177,22 @@ export function normalizeSmtpHost(value: unknown): string {
 export function normalizeSmtpPort(value: unknown, pluginId: SmtpDeliveryPluginId = GMAIL_SMTP_PLUGIN_ID): number {
   const port = typeof value === "number" ? value : Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error("SMTP port must be between 1 and 65535.");
+    throw new Error("SMTP 포트는 1에서 65535 사이여야 합니다.");
   }
   if (pluginId === GMAIL_SMTP_PLUGIN_ID && port !== 587) {
-    throw new Error("Gmail SMTP port must be 587 for STARTTLS.");
+    throw new Error("Gmail SMTP 포트는 STARTTLS용 587이어야 합니다.");
   }
   return port;
 }
 
 export function normalizeSmtpEmail(value: unknown, fieldLabel = "Email address"): string {
   if (typeof value !== "string") {
-    throw new Error(`${fieldLabel} is required.`);
+    throw new Error(`${fieldLabel}이 필요합니다.`);
   }
 
   const email = value.normalize("NFKC").trim();
   if (!email || email.length > 254 || /\s/.test(email) || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
-    throw new Error(`${fieldLabel} must be a valid email address.`);
+    throw new Error(`${fieldLabel}은 올바른 이메일 주소여야 합니다.`);
   }
 
   return email;
@@ -200,12 +200,12 @@ export function normalizeSmtpEmail(value: unknown, fieldLabel = "Email address")
 
 function normalizeSmtpUsername(value: unknown): string {
   if (typeof value !== "string") {
-    throw new Error("SMTP username is required.");
+    throw new Error("SMTP 사용자 이름이 필요합니다.");
   }
 
   const username = value.normalize("NFKC").trim();
   if (!username || username.length > 254 || /[\u0000-\u001f\u007f]/.test(username)) {
-    throw new Error("SMTP username is required.");
+    throw new Error("SMTP 사용자 이름이 필요합니다.");
   }
 
   return username;
@@ -216,7 +216,7 @@ function normalizeBoolean(value: unknown, fallback: boolean, fieldLabel: string)
     return fallback;
   }
   if (typeof value !== "boolean") {
-    throw new Error(`${fieldLabel} must be true or false.`);
+    throw new Error(`${fieldLabel} 값은 true 또는 false여야 합니다.`);
   }
   return value;
 }
@@ -224,14 +224,14 @@ function normalizeBoolean(value: unknown, fallback: boolean, fieldLabel: string)
 export function validateSmtpAppPassword(value: string): string {
   const appPassword = normalizeSmtpAppPassword(value);
   if (appPassword.length !== 16) {
-    throw new Error("Gmail app password must be 16 characters after removing spaces.");
+    throw new Error("Gmail 앱 비밀번호는 공백 제거 후 16자여야 합니다.");
   }
   return appPassword;
 }
 
 function validateGenericSmtpPassword(value: string): string {
   if (!value.trim() || value.length > 1024) {
-    throw new Error("SMTP password is required.");
+    throw new Error("SMTP 비밀번호가 필요합니다.");
   }
   return value;
 }
@@ -241,14 +241,14 @@ export function toSafeSmtpError(caught: unknown): string {
   const responseCode = isRecord(caught) && typeof caught.responseCode === "number" ? caught.responseCode : 0;
 
   if (responseCode === 534 || responseCode === 535 || code === "EAUTH") {
-    return "SMTP authentication failed. Check the SMTP account and password.";
+    return "SMTP 인증에 실패했습니다. 계정과 비밀번호를 확인하세요.";
   }
 
   if (["ECONNECTION", "ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "ETIMEDOUT", "ESOCKET"].includes(code)) {
-    return "SMTP network connection failed. Check the host, port, and network connection.";
+    return "SMTP 네트워크 연결에 실패했습니다. 호스트, 포트, 네트워크 연결을 확인하세요.";
   }
 
-  return "SMTP request failed. Check the SMTP settings and try again.";
+  return "SMTP 요청에 실패했습니다. 설정값을 확인하고 다시 시도하세요.";
 }
 
 function settingsPathFor(userDataPath: string, pluginId: SmtpDeliveryPluginId): string {
@@ -350,12 +350,12 @@ function normalizeSaveRequest(pluginId: SmtpDeliveryPluginId, values: unknown): 
 function normalizeSendRequest(payload: unknown): SendSmtpEmailRequest {
   const deliveryPayload = normalizeDeliveryPackagePayload(payload);
   if (!isRecord(payload)) {
-    throw new Error("Email send request is required.");
+    throw new Error("이메일 발송 요청이 필요합니다.");
   }
 
   const subject = typeof payload.subject === "string" ? payload.subject.normalize("NFKC").trim() : "";
   if (!subject) {
-    throw new Error("Email subject is required.");
+    throw new Error("이메일 제목이 필요합니다.");
   }
 
   return {
@@ -436,7 +436,7 @@ export function createSmtpDeliveryPluginService({
         password
       };
     } catch {
-      throw new Error("SMTP password is unavailable. Save settings again.");
+      throw new Error("SMTP 비밀번호를 사용할 수 없습니다. 설정을 다시 저장하세요.");
     }
   }
 
@@ -494,7 +494,7 @@ export function createSmtpDeliveryPluginService({
     request: SendSmtpEmailRequest
   ): Promise<SendSmtpEmailResult> {
     if (!readHistoryAttachment) {
-      throw new Error("Publish history email delivery is not available.");
+      throw new Error("발행 이력 이메일 발송을 사용할 수 없습니다.");
     }
 
     const attachmentHtml = await readHistoryAttachment(request);
@@ -508,7 +508,7 @@ export function createSmtpDeliveryPluginService({
 
   async function assertEnabled(pluginId: SmtpDeliveryPluginId): Promise<void> {
     if (!(await isPluginEnabled(pluginId))) {
-      throw new Error("SMTP plugin is disabled.");
+      throw new Error("SMTP 플러그인이 비활성화되어 있습니다.");
     }
   }
 

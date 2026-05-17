@@ -66,7 +66,7 @@ test("SMTP settings are validated and stored without exposing the raw app passwo
           senderEmail: "sender@gmail.com",
           appPassword: "abcd efgh ijkl mnop"
         }),
-      /SMTP host/
+      /SMTP 호스트/
     );
     await assert.rejects(
       () =>
@@ -76,7 +76,7 @@ test("SMTP settings are validated and stored without exposing the raw app passwo
           senderEmail: "sender@gmail.com",
           appPassword: "abcd efgh ijkl mnop"
         }),
-      /SMTP port/
+      /SMTP 포트/
     );
     await assert.rejects(
       () =>
@@ -106,7 +106,7 @@ test("SMTP settings are validated and stored without exposing the raw app passwo
           senderEmail: "sender@gmail.com",
           appPassword: "short"
         }),
-      /16 characters/
+      /16자/
     );
 
     const view = await service.saveSettings(GMAIL_SMTP_PLUGIN_ID, {
@@ -174,7 +174,7 @@ test("SMTP actions verify and send through the injected transport only when enab
       appPassword: "abcd efgh ijkl mnop"
     });
 
-    await assert.rejects(() => service.runAction(GMAIL_SMTP_PLUGIN_ID, GMAIL_SMTP_TEST_ACTION_ID), /disabled/);
+    await assert.rejects(() => service.runAction(GMAIL_SMTP_PLUGIN_ID, GMAIL_SMTP_TEST_ACTION_ID), /비활성화/);
 
     enabled = true;
     assert.deepEqual(await service.runAction(GMAIL_SMTP_PLUGIN_ID, GMAIL_SMTP_TEST_ACTION_ID), { ok: true });
@@ -205,7 +205,7 @@ test("SMTP actions verify and send through the injected transport only when enab
       from: "sender@gmail.com",
       to: "recipient@example.com",
       subject: "Secure document",
-      text: "A secure HTML document is attached. Share the PIN through a separate channel.",
+      text: "보안 HTML 문서를 첨부했습니다. 문서 열람 PIN은 별도 채널로 전달됩니다.",
       attachments: [
         {
           filename: "secure.html",
@@ -263,7 +263,7 @@ test("SMTP history action reads a validated history attachment before sending", 
       from: "sender@gmail.com",
       to: "recipient@example.com",
       subject: "Saved secure document",
-      text: "A secure HTML document is attached. Share the PIN through a separate channel.",
+      text: "보안 HTML 문서를 첨부했습니다. 문서 열람 PIN은 별도 채널로 전달됩니다.",
       attachments: [
         {
           filename: "doc-1.html",
@@ -353,7 +353,7 @@ test("generic SMTP settings store encrypted credentials and send through configu
       from: "sender@example.com",
       to: "recipient@example.com",
       subject: "Generic SMTP document",
-      text: "A secure HTML document is attached. Share the PIN through a separate channel.",
+      text: "보안 HTML 문서를 첨부했습니다. 문서 열람 PIN은 별도 채널로 전달됩니다.",
       attachments: [
         {
           filename: "doc-2.html",
@@ -409,7 +409,7 @@ test("generic SMTP errors are masked without leaking credentials or package cont
         }),
       (caught) => {
         assert.ok(caught instanceof Error);
-        assert.match(caught.message, /authentication failed/);
+        assert.match(caught.message, /SMTP 인증/);
         assert.equal(caught.message.includes("sender@example.com"), false);
         assert.equal(caught.message.includes("smtp secret 123"), false);
         assert.equal(caught.message.includes("123456"), false);
@@ -455,7 +455,7 @@ test("SMTP action errors are mapped to safe messages without leaking secrets or 
       () => service.runAction(GMAIL_SMTP_PLUGIN_ID, GMAIL_SMTP_TEST_ACTION_ID),
       (caught) => {
         assert.ok(caught instanceof Error);
-        assert.match(caught.message, /authentication failed/);
+        assert.match(caught.message, /SMTP 인증/);
         assert.equal(caught.message.includes("sender@gmail.com"), false);
         assert.equal(caught.message.includes("abcdefghijklmnop"), false);
         assert.equal(caught.message.includes("123456"), false);
@@ -508,7 +508,7 @@ test("SMTP send failures are mapped to safe messages without leaking attachment 
         }),
       (caught) => {
         assert.ok(caught instanceof Error);
-        assert.match(caught.message, /SMTP request failed/);
+        assert.match(caught.message, /SMTP 요청/);
         assert.equal(caught.message.includes("sender@gmail.com"), false);
         assert.equal(caught.message.includes("abcdefghijklmnop"), false);
         assert.equal(caught.message.includes("123456"), false);
