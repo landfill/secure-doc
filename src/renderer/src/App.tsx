@@ -1033,7 +1033,7 @@ export function App(): ReactElement {
   async function handleAuditIntegrityReport(item: PublishHistoryRecord): Promise<void> {
     const pluginApi = window.secureDoc?.plugins;
     if (!pluginApi || !auditHistoryActionEnabled) {
-      setError("Audit plugin is not available.");
+      setError("감사 플러그인을 사용할 수 없습니다.");
       return;
     }
 

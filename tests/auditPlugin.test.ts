@@ -54,7 +54,7 @@ test("audit integrity action reports a verified saved package without exposing c
     platform: "win32",
     checkedAt: "2026-05-17T10:00:00.000Z",
     status: "verified",
-    message: "Saved secure HTML file matches publish history."
+    message: "저장된 보안 HTML 파일이 발행 이력과 일치합니다."
   });
   assert.equal(JSON.stringify(report).includes("Issued package"), false);
 });
@@ -74,7 +74,7 @@ test("audit integrity action reports missing and tampered packages safely", asyn
     outputPath: record.outputPath
   })) as AuditPackageIntegrityReport;
   assert.equal(missingReport.status, "missing");
-  assert.equal(missingReport.message, "Saved secure HTML file is missing.");
+  assert.equal(missingReport.message, "저장된 보안 HTML 파일을 찾을 수 없습니다.");
 
   const tamperedService = createAuditPluginService({
     isPluginEnabled: async () => true,
@@ -90,7 +90,7 @@ test("audit integrity action reports missing and tampered packages safely", asyn
   const serializedReport = JSON.stringify(tamperedReport);
 
   assert.equal(tamperedReport.status, "tampered");
-  assert.equal(tamperedReport.message, "Saved secure HTML file hash differs from publish history.");
+  assert.equal(tamperedReport.message, "저장된 보안 HTML 파일의 해시가 발행 이력과 다릅니다.");
   assert.equal(serializedReport.includes("Plain confidential body"), false);
   assert.equal(serializedReport.includes("123456"), false);
   assert.equal(serializedReport.includes("pinhash-abc"), false);
@@ -111,7 +111,7 @@ test("audit plugin rejects disabled or unknown action requests", async () => {
         documentId: record.documentId,
         outputPath: record.outputPath
       }),
-    /disabled/
+    /비활성화/
   );
 
   const enabledService = createAuditPluginService({
@@ -119,13 +119,13 @@ test("audit plugin rejects disabled or unknown action requests", async () => {
     listHistory: async () => [record]
   });
 
-  await assert.rejects(() => enabledService.runAction(AUDIT_INTEGRITY_PLUGIN_ID, "unknown-action"), /Unknown plugin action/);
+  await assert.rejects(() => enabledService.runAction(AUDIT_INTEGRITY_PLUGIN_ID, "unknown-action"), /알 수 없는 플러그인 액션/);
   await assert.rejects(
     () =>
       enabledService.runAction(AUDIT_INTEGRITY_PLUGIN_ID, AUDIT_INTEGRITY_HISTORY_ACTION_ID, {
         documentId: "missing-doc",
         outputPath: record.outputPath
       }),
-    /not available/
+    /사용할 수 없습니다/
   );
 });

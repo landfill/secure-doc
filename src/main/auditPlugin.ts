@@ -25,14 +25,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizeAuditPackageIntegrityRequest(payload: unknown): AuditPackageIntegrityRequest {
   if (!isRecord(payload)) {
-    throw new Error("Audit request is required.");
+    throw new Error("감사 요청 정보가 필요합니다.");
   }
 
   const documentId = typeof payload.documentId === "string" ? payload.documentId.trim() : "";
   const outputPath = typeof payload.outputPath === "string" ? payload.outputPath.trim() : "";
 
   if (!documentId || !outputPath) {
-    throw new Error("Publish history item is required.");
+    throw new Error("발행 이력 항목이 필요합니다.");
   }
 
   return {
@@ -76,7 +76,7 @@ export function createAuditPluginService({
 }: AuditPluginServiceOptions): AuditPluginService {
   async function assertEnabled(): Promise<void> {
     if (!(await isPluginEnabled(AUDIT_INTEGRITY_PLUGIN_ID))) {
-      throw new Error("Audit plugin is disabled.");
+      throw new Error("감사 플러그인이 비활성화되어 있습니다.");
     }
   }
 
@@ -86,7 +86,7 @@ export function createAuditPluginService({
       (item) => item.documentId === request.documentId && item.outputPath === request.outputPath
     );
     if (!record) {
-      throw new Error("Selected publish history item is not available for audit report.");
+      throw new Error("선택한 발행 이력 항목을 감사 리포트에서 사용할 수 없습니다.");
     }
 
     const checkedAt = now().toISOString();
@@ -94,21 +94,21 @@ export function createAuditPluginService({
     try {
       packageHtml = await readPackageFile(record.outputPath);
     } catch {
-      return toReport(record, checkedAt, "missing", "Saved secure HTML file is missing.");
+      return toReport(record, checkedAt, "missing", "저장된 보안 HTML 파일을 찾을 수 없습니다.");
     }
 
     try {
       assertPackageContentMatchesHash(packageHtml, record.packageSha256);
-      return toReport(record, checkedAt, "verified", "Saved secure HTML file matches publish history.");
+      return toReport(record, checkedAt, "verified", "저장된 보안 HTML 파일이 발행 이력과 일치합니다.");
     } catch {
-      return toReport(record, checkedAt, "tampered", "Saved secure HTML file hash differs from publish history.");
+      return toReport(record, checkedAt, "tampered", "저장된 보안 HTML 파일의 해시가 발행 이력과 다릅니다.");
     }
   }
 
   return {
     async runAction(pluginId, actionId, payload) {
       if (pluginId !== AUDIT_INTEGRITY_PLUGIN_ID) {
-        throw new Error(`Unknown plugin: ${pluginId}`);
+        throw new Error(`알 수 없는 플러그인입니다: ${pluginId}`);
       }
       await assertEnabled();
 
@@ -116,7 +116,7 @@ export function createAuditPluginService({
         return verifyPackageIntegrity(payload);
       }
 
-      throw new Error(`Unknown plugin action: ${actionId}`);
+      throw new Error(`알 수 없는 플러그인 액션입니다: ${actionId}`);
     }
   };
 }
