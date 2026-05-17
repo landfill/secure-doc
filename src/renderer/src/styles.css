@@ -80,6 +80,11 @@ button.primary {
 }
 
 .sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
   border-right: 1px solid var(--border);
   padding: 16px;
   background: var(--surface);
@@ -819,6 +824,78 @@ select:focus,
   font-size: 12px;
 }
 
+.audit-report {
+  display: grid;
+  gap: 12px;
+  margin: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--surface-warm);
+}
+
+.audit-report.verified {
+  border-color: rgba(47, 125, 74, 0.35);
+  background: var(--surface-success);
+}
+
+.audit-report.missing,
+.audit-report.tampered {
+  border-color: rgba(181, 58, 42, 0.36);
+  background: var(--surface-error);
+}
+
+.audit-report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.audit-report-header strong {
+  font-size: 14px;
+}
+
+.audit-report-header span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.audit-report dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.audit-report dl div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.audit-report dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.audit-report dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.audit-report p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .security-policy-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -894,7 +971,7 @@ select:focus,
   font-weight: 700;
 }
 
-.plugin-item p {
+.plugin-description {
   margin: 7px 0 0;
   color: var(--muted);
   line-height: 1.45;
@@ -911,21 +988,92 @@ select:focus,
   overflow-wrap: anywhere;
 }
 
-.plugin-toggle {
+.plugin-toggle-button {
   display: inline-flex;
   align-items: center;
-  grid-template-columns: none;
-  gap: 8px;
+  gap: 9px;
+  height: 34px;
+  border-color: var(--border-control);
+  border-radius: 999px;
+  padding: 3px 10px 3px 4px;
   white-space: nowrap;
-  color: var(--text);
+  color: var(--muted);
+  background: var(--surface);
   font-size: 13px;
   font-weight: 700;
 }
 
-.plugin-toggle input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
+.plugin-toggle-button:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--surface);
+}
+
+.plugin-toggle-button:focus-visible {
+  outline: 3px solid var(--accent-focus);
+}
+
+.plugin-toggle-button.enabled {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.plugin-toggle-track {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--border-control);
+  transition: background 140ms ease;
+}
+
+.plugin-toggle-button.enabled .plugin-toggle-track {
+  background: var(--accent);
+}
+
+.plugin-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(28, 27, 26, 0.28);
+  transition: transform 140ms ease;
+}
+
+.plugin-toggle-button.enabled .plugin-toggle-thumb {
+  transform: translateX(18px);
+}
+
+.plugin-toggle-text {
+  min-width: 40px;
+  text-align: left;
+}
+
+.plugin-feature-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: var(--surface);
+}
+
+.plugin-feature-list strong {
+  font-size: 12px;
+}
+
+.plugin-feature-list ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .plugin-chip-row {
@@ -1137,6 +1285,9 @@ select:focus,
   }
 
   .sidebar {
+    position: static;
+    height: auto;
+    overflow: visible;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
@@ -1159,6 +1310,7 @@ select:focus,
   }
 
   .metadata-panel .form-grid,
+  .audit-report dl,
   .security-policy-grid,
   .publish-dialog-grid,
   .smtp-settings-grid {

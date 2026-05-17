@@ -3,17 +3,21 @@ import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type {
+  AuditPackageIntegrityReport,
   PublishHistoryRecord,
   SaveSmtpSettingsRequest,
   SendSmtpEmailResult,
   SmtpSettingsView
 } from "../../shared/desktopApi";
 import {
+  AUDIT_INTEGRITY_HISTORY_ACTION_ID,
+  AUDIT_INTEGRITY_PLUGIN_ID,
   EMPTY_PLUGIN_CONTRIBUTIONS,
   GMAIL_SMTP_HISTORY_SEND_ACTION_ID,
   GMAIL_SMTP_PLUGIN_ID,
   GMAIL_SMTP_SEND_ACTION_ID,
   GMAIL_SMTP_TEST_ACTION_ID,
+  type PluginCategory,
   type PluginContributions,
   type PluginDescriptor,
   type PluginPermission
@@ -123,12 +127,76 @@ const pluginPermissionLabels: Record<PluginPermission, string> = {
   "ui:publish-action": "발행 액션"
 };
 
+const pluginCategoryLabels: Record<PluginCategory, string> = {
+  delivery: "전달",
+  template: "템플릿",
+  audit: "감사",
+  branding: "브랜딩",
+  policy: "정책"
+};
+
 function isTextAlign(value: unknown): value is TextAlign {
   return typeof value === "string" && textAlignments.includes(value as TextAlign);
 }
 
+function pluginCategoryLabel(category: PluginCategory): string {
+  return pluginCategoryLabels[category];
+}
+
 function pluginPermissionLabel(permission: PluginPermission): string {
   return pluginPermissionLabels[permission];
+}
+
+function pluginDisplayName(plugin: PluginDescriptor): string {
+  if (plugin.id === GMAIL_SMTP_PLUGIN_ID) {
+    return "Gmail SMTP 발송";
+  }
+  if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
+    return "패키지 무결성 감사";
+  }
+  return plugin.name;
+}
+
+function pluginDisplayDescription(plugin: PluginDescriptor): string {
+  if (plugin.id === GMAIL_SMTP_PLUGIN_ID) {
+    return "보안 HTML 파일을 Gmail SMTP 메일에 첨부해 외부 수신자에게 보냅니다.";
+  }
+  if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
+    return "저장된 보안 HTML 파일이 발행 당시 기록된 SHA-256 해시와 일치하는지 검사합니다.";
+  }
+  return plugin.description;
+}
+
+function pluginFeatureDescriptions(plugin: PluginDescriptor): string[] {
+  if (plugin.id === GMAIL_SMTP_PLUGIN_ID) {
+    return [
+      "플러그인 화면에 Gmail SMTP 계정과 앱 비밀번호 설정 패널이 표시됩니다.",
+      "문서 발행 직후 보안 HTML 파일을 이메일 첨부로 보낼 수 있습니다.",
+      "발행 이력에 저장된 보안 HTML 파일을 다시 이메일로 보낼 수 있습니다."
+    ];
+  }
+  if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
+    return [
+      "발행 이력에서 저장된 HTML 파일의 SHA-256 해시를 다시 계산합니다.",
+      "발행 당시 기록된 해시와 비교해 정상, 파일 없음, 변조 의심 상태를 보여줍니다.",
+      "PIN, 평문 본문, 암호화 키를 리포트에 포함하지 않습니다."
+    ];
+  }
+
+  const descriptions: string[] = [];
+  if (plugin.contributes.settingsPanel) {
+    descriptions.push("설정 화면에서 이 플러그인의 계정, 비밀번호, 옵션을 관리합니다.");
+  }
+  for (const action of plugin.contributes.publishActions ?? []) {
+    descriptions.push(`문서 발행 직후: ${action.description}`);
+  }
+  for (const action of plugin.contributes.historyActions ?? []) {
+    descriptions.push(`발행 이력에서: ${action.description}`);
+  }
+  for (const template of plugin.contributes.templates ?? []) {
+    descriptions.push(`문서 작성에서: ${template.description}`);
+  }
+  return descriptions;
 }
 
 function pluginContributionLabels(plugin: PluginDescriptor): string[] {
@@ -166,6 +234,12 @@ function hasActiveSmtpSendAction(contributions: PluginContributions): boolean {
 function hasActiveSmtpHistorySendAction(contributions: PluginContributions): boolean {
   return contributions.historyActions.some(
     (action) => action.pluginId === GMAIL_SMTP_PLUGIN_ID && action.id === GMAIL_SMTP_HISTORY_SEND_ACTION_ID
+  );
+}
+
+function hasActiveAuditIntegrityHistoryAction(contributions: PluginContributions): boolean {
+  return contributions.historyActions.some(
+    (action) => action.pluginId === AUDIT_INTEGRITY_PLUGIN_ID && action.id === AUDIT_INTEGRITY_HISTORY_ACTION_ID
   );
 }
 
@@ -512,6 +586,8 @@ export function App(): ReactElement {
   const [pendingEmailPackage, setPendingEmailPackage] = useState<PendingEmailPackage | null>(null);
   const [emailSendForm, setEmailSendForm] = useState<EmailSendForm>(defaultEmailSendForm);
   const [emailBusy, setEmailBusy] = useState(false);
+  const [auditBusyDocumentId, setAuditBusyDocumentId] = useState<string | null>(null);
+  const [auditReport, setAuditReport] = useState<AuditPackageIntegrityReport | null>(null);
   const [activeNavTarget, setActiveNavTarget] = useState<NavTarget>("document");
   const screenRootRef = useRef<HTMLDivElement | null>(null);
   const didMountScreenRef = useRef(false);
@@ -523,6 +599,7 @@ export function App(): ReactElement {
   const smtpSendActionEnabled = hasActiveSmtpSendAction(pluginContributions);
   const smtpPluginEnabled = isSmtpPluginEnabled(plugins);
   const smtpHistorySendActionEnabled = hasActiveSmtpHistorySendAction(pluginContributions);
+  const auditHistoryActionEnabled = hasActiveAuditIntegrityHistoryAction(pluginContributions);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -595,7 +672,11 @@ export function App(): ReactElement {
         setSmtpStatus("");
         setSmtpError("");
       }
-      setStatus(`${plugin.name} 플러그인을 ${enabled ? "활성화" : "비활성화"}했습니다.`);
+      if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID && !enabled) {
+        setAuditReport(null);
+        setAuditBusyDocumentId(null);
+      }
+      setStatus(`${pluginDisplayName(plugin)} 플러그인을 ${enabled ? "활성화" : "비활성화"}했습니다.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "플러그인 상태를 변경하지 못했습니다.");
     } finally {
@@ -937,6 +1018,42 @@ export function App(): ReactElement {
     setStatus("");
     setError("");
     setEmailDialogOpen(true);
+  }
+
+  function auditStatusLabel(report: AuditPackageIntegrityReport): string {
+    if (report.status === "verified") {
+      return "정상";
+    }
+    if (report.status === "missing") {
+      return "파일 없음";
+    }
+    return "변조 의심";
+  }
+
+  async function handleAuditIntegrityReport(item: PublishHistoryRecord): Promise<void> {
+    const pluginApi = window.secureDoc?.plugins;
+    if (!pluginApi || !auditHistoryActionEnabled) {
+      setError("감사 플러그인을 사용할 수 없습니다.");
+      return;
+    }
+
+    setAuditBusyDocumentId(item.documentId);
+    setStatus("감사 리포트를 생성 중입니다.");
+    setError("");
+    try {
+      const report = (await pluginApi.runAction(AUDIT_INTEGRITY_PLUGIN_ID, AUDIT_INTEGRITY_HISTORY_ACTION_ID, {
+        documentId: item.documentId,
+        outputPath: item.outputPath
+      })) as AuditPackageIntegrityReport;
+      setAuditReport(report);
+      setStatus(report.message);
+    } catch (caught) {
+      setAuditReport(null);
+      setError(caught instanceof Error ? caught.message : "감사 리포트를 생성하지 못했습니다.");
+      setStatus("");
+    } finally {
+      setAuditBusyDocumentId(null);
+    }
   }
 
   async function handleSendEmail(): Promise<void> {
@@ -1472,12 +1589,13 @@ export function App(): ReactElement {
                   <th>SHA-256</th>
                   <th>파일</th>
                   <th>이메일</th>
+                  <th>감사</th>
                 </tr>
               </thead>
               <tbody>
                 {history.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>저장된 발행 이력이 없습니다.</td>
+                    <td colSpan={7}>저장된 발행 이력이 없습니다.</td>
                   </tr>
                 ) : (
                   history.map((item) => (
@@ -1503,12 +1621,48 @@ export function App(): ReactElement {
                           발송
                         </button>
                       </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => void handleAuditIntegrityReport(item)}
+                          disabled={!auditHistoryActionEnabled || auditBusyDocumentId === item.documentId}
+                        >
+                          {auditBusyDocumentId === item.documentId ? "검증 중" : "검증"}
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
+          {auditReport && (
+            <div className={`audit-report ${auditReport.status}`}>
+              <div className="audit-report-header">
+                <strong>감사 리포트</strong>
+                <span>{auditStatusLabel(auditReport)}</span>
+              </div>
+              <dl>
+                <div>
+                  <dt>문서</dt>
+                  <dd>{auditReport.title}</dd>
+                </div>
+                <div>
+                  <dt>문서 ID</dt>
+                  <dd>{auditReport.documentId}</dd>
+                </div>
+                <div>
+                  <dt>검증 시각</dt>
+                  <dd>{new Date(auditReport.checkedAt).toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt>SHA-256</dt>
+                  <dd className="hash">{auditReport.packageSha256}</dd>
+                </div>
+              </dl>
+              <p>{auditReport.message}</p>
+            </div>
+          )}
         </section>
         )}
 
@@ -1526,31 +1680,48 @@ export function App(): ReactElement {
             ) : (
               plugins.map((plugin) => {
                 const contributionLabels = pluginContributionLabels(plugin);
+                const featureDescriptions = pluginFeatureDescriptions(plugin);
+                const displayName = pluginDisplayName(plugin);
                 return (
                   <article className="plugin-item" key={plugin.id}>
                     <div className="plugin-item-main">
                       <div>
                         <div className="plugin-title-row">
-                          <h3>{plugin.name}</h3>
-                          <span className="plugin-category">{plugin.category}</span>
+                          <h3>{displayName}</h3>
+                          <span className="plugin-category">{pluginCategoryLabel(plugin.category)}</span>
                         </div>
-                        <p>{plugin.description}</p>
+                        <p className="plugin-description">{pluginDisplayDescription(plugin)}</p>
                         <div className="plugin-meta">
                           <span>{plugin.id}</span>
                           <span>v{plugin.version}</span>
                         </div>
                       </div>
-                      <label className="plugin-toggle">
-                        <input
-                          type="checkbox"
-                          checked={plugin.enabled}
-                          disabled={pluginBusyId === plugin.id}
-                          onChange={(event) => void handlePluginToggle(plugin, event.target.checked)}
-                        />
-                        <span>{plugin.enabled ? "활성" : "비활성"}</span>
-                      </label>
+                      <button
+                        type="button"
+                        className={["plugin-toggle-button", plugin.enabled ? "enabled" : ""].filter(Boolean).join(" ")}
+                        role="switch"
+                        aria-checked={plugin.enabled}
+                        aria-label={`${displayName} 플러그인 ${plugin.enabled ? "비활성화" : "활성화"}`}
+                        disabled={pluginBusyId === plugin.id}
+                        onClick={() => void handlePluginToggle(plugin, !plugin.enabled)}
+                      >
+                        <span className="plugin-toggle-track" aria-hidden="true">
+                          <span className="plugin-toggle-thumb" />
+                        </span>
+                        <span className="plugin-toggle-text">{plugin.enabled ? "활성" : "비활성"}</span>
+                      </button>
                     </div>
-                    <div className="plugin-chip-row" aria-label={`${plugin.name} 권한`}>
+                    {featureDescriptions.length > 0 && (
+                      <div className="plugin-feature-list" aria-label={`${displayName} 기능 설명`}>
+                        <strong>활성화하면</strong>
+                        <ul>
+                          {featureDescriptions.map((description) => (
+                            <li key={description}>{description}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="plugin-chip-row" aria-label={`${displayName} 권한`}>
                       {plugin.permissions.length === 0 ? (
                         <span className="plugin-chip muted">권한 없음</span>
                       ) : (
@@ -1561,7 +1732,7 @@ export function App(): ReactElement {
                         ))
                       )}
                     </div>
-                    <div className="plugin-chip-row" aria-label={`${plugin.name} 확장 지점`}>
+                    <div className="plugin-chip-row" aria-label={`${displayName} 확장 지점`}>
                       {contributionLabels.map((label) => (
                         <span className="plugin-chip contribution" key={label}>
                           {label}

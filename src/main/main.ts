@@ -1,12 +1,13 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
+import { createAuditPluginService } from "./auditPlugin";
 import { createHistoryStore } from "./history";
 import { assertPackageContentMatchesHash, sha256Base64Url } from "./packageIntegrity";
 import { createPluginStore } from "./pluginStore";
 import { createGmailSmtpPluginService } from "./smtpPlugin";
 import type { PublishHistoryRecord, SavePackageRequest, SavePackageResult } from "../shared/desktopApi";
-import type { PluginContributions, PluginDescriptor } from "../shared/plugins";
+import { AUDIT_INTEGRITY_PLUGIN_ID, GMAIL_SMTP_PLUGIN_ID, type PluginContributions, type PluginDescriptor } from "../shared/plugins";
 
 let mainWindow: BrowserWindow | null = null;
 const historyStorePromise = app.whenReady().then(() => createHistoryStore(app.getPath("userData")));
@@ -36,6 +37,18 @@ const smtpPluginServicePromise = app.whenReady().then(() =>
       }
       assertPackageContentMatchesHash(attachmentHtml, historyRecord.packageSha256);
       return attachmentHtml;
+    }
+  })
+);
+const auditPluginServicePromise = app.whenReady().then(() =>
+  createAuditPluginService({
+    async isPluginEnabled(pluginId) {
+      const pluginStore = await pluginStorePromise;
+      return (await pluginStore.list()).some((plugin) => plugin.id === pluginId && plugin.enabled);
+    },
+    async listHistory() {
+      const historyStore = await historyStorePromise;
+      return historyStore.list();
     }
   })
 );
@@ -177,8 +190,17 @@ ipcMain.handle("secure-doc:plugins:run-action", async (_event, pluginId: string,
     throw new Error("Invalid plugin action request.");
   }
 
-  const smtpPluginService = await smtpPluginServicePromise;
-  return smtpPluginService.runAction(pluginId, actionId, payload);
+  if (pluginId === GMAIL_SMTP_PLUGIN_ID) {
+    const smtpPluginService = await smtpPluginServicePromise;
+    return smtpPluginService.runAction(pluginId, actionId, payload);
+  }
+
+  if (pluginId === AUDIT_INTEGRITY_PLUGIN_ID) {
+    const auditPluginService = await auditPluginServicePromise;
+    return auditPluginService.runAction(pluginId, actionId, payload);
+  }
+
+  throw new Error(`Unknown plugin: ${pluginId}`);
 });
 
 app.whenReady().then(() => {
