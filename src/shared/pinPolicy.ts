@@ -12,6 +12,11 @@ export type PinPolicyResult =
   | { valid: true; normalizedPin: string; message: string }
   | { valid: false; normalizedPin: string; message: string };
 
+export interface PinPolicyOptions {
+  minLength?: number;
+  maxLength?: number;
+}
+
 export interface PinRandomSource {
   getRandomValues(array: Uint8Array): Uint8Array;
 }
@@ -20,9 +25,13 @@ export function normalizePin(input: string): string {
   return input.normalize("NFKC").trim();
 }
 
-function hasValidLength(pin: string): boolean {
+function normalizePolicyLength(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) ? value : fallback;
+}
+
+function hasValidLength(pin: string, minLength: number, maxLength: number): boolean {
   const length = [...pin].length;
-  return length >= PIN_MIN_LENGTH && length <= PIN_MAX_LENGTH;
+  return length >= minLength && length <= maxLength;
 }
 
 function isRepeatedCharacter(pin: string): boolean {
@@ -40,14 +49,16 @@ function isSequentialDigitRun(pin: string): boolean {
   return forward || backward;
 }
 
-export function evaluatePinPolicy(input: string): PinPolicyResult {
+export function evaluatePinPolicy(input: string, options: PinPolicyOptions = {}): PinPolicyResult {
   const normalizedPin = normalizePin(input);
+  const minLength = normalizePolicyLength(options.minLength, PIN_MIN_LENGTH);
+  const maxLength = normalizePolicyLength(options.maxLength, PIN_MAX_LENGTH);
 
-  if (!hasValidLength(normalizedPin) || CONTROL_CHARACTERS.test(normalizedPin)) {
+  if (!hasValidLength(normalizedPin, minLength, maxLength) || CONTROL_CHARACTERS.test(normalizedPin)) {
     return {
       valid: false,
       normalizedPin,
-      message: "PIN은 숫자, 문자, 기호를 포함해 6자리 이상 15자리 이내여야 합니다."
+      message: `PIN은 숫자, 문자, 기호를 포함해 ${minLength}자리 이상 ${maxLength}자리 이내여야 합니다.`
     };
   }
 
