@@ -1945,7 +1945,7 @@ export function App(): ReactElement {
                                   checked={smtpSettingsForm.secure}
                                   onChange={(event) => updateSmtpSettingsForm(smtpPluginId, "secure", event.target.checked)}
                                 />
-                                Implicit TLS 사용 (포트 465 등)
+                                암시적 TLS 사용 (포트 465 등)
                               </label>
                             </div>
                           )}
