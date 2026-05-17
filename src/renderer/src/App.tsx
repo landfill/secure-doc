@@ -4,6 +4,12 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { PublishHistoryRecord } from "../../shared/desktopApi";
 import {
+  EMPTY_PLUGIN_CONTRIBUTIONS,
+  type PluginContributions,
+  type PluginDescriptor,
+  type PluginPermission
+} from "../../shared/plugins";
+import {
   COMPAT_PIN_KDF_ITERATIONS,
   DEFAULT_PIN_KDF_ITERATIONS,
   evaluatePinPolicy,
@@ -19,6 +25,7 @@ type EditorMode = "visual" | "html";
 type HeadingLevel = 1 | 2 | 3;
 type BlockStyle = "paragraph" | `heading-${HeadingLevel}`;
 type TextAlign = "left" | "center" | "right" | "justify";
+type NavTarget = "document" | "security" | "history" | "plugins";
 const documentTypes = ["보험증서", "계약서", "고지서", "안내문", "기타"] as const;
 type DocumentType = (typeof documentTypes)[number];
 
@@ -52,8 +59,46 @@ type DocumentPreset = {
 
 const textAlignments: TextAlign[] = ["left", "center", "right", "justify"];
 
+const navigationItems: { id: NavTarget; label: string }[] = [
+  { id: "document", label: "문서 발행" },
+  { id: "history", label: "발행 이력" },
+  { id: "security", label: "보안 정책" },
+  { id: "plugins", label: "플러그인" }
+];
+
+const pluginPermissionLabels: Record<PluginPermission, string> = {
+  "network:smtp": "SMTP 네트워크",
+  "secret:safeStorage": "보안 저장소",
+  "package:read": "발행 파일 읽기",
+  "history:read": "이력 읽기",
+  "history:write": "이력 쓰기",
+  "ui:settings": "설정 화면",
+  "ui:publish-action": "발행 액션"
+};
+
 function isTextAlign(value: unknown): value is TextAlign {
   return typeof value === "string" && textAlignments.includes(value as TextAlign);
+}
+
+function pluginPermissionLabel(permission: PluginPermission): string {
+  return pluginPermissionLabels[permission];
+}
+
+function pluginContributionLabels(plugin: PluginDescriptor): string[] {
+  const labels: string[] = [];
+  if (plugin.contributes.settingsPanel) {
+    labels.push("설정 패널");
+  }
+  if (plugin.contributes.publishActions?.length) {
+    labels.push("발행 액션");
+  }
+  if (plugin.contributes.templates?.length) {
+    labels.push("템플릿");
+  }
+  if (plugin.contributes.historyActions?.length) {
+    labels.push("이력 액션");
+  }
+  return labels;
 }
 
 const SecureDocTextAlign = Extension.create({
@@ -368,8 +413,14 @@ export function App(): ReactElement {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<PublishHistoryRecord[]>([]);
+  const [plugins, setPlugins] = useState<PluginDescriptor[]>([]);
+  const [pluginContributions, setPluginContributions] = useState<PluginContributions>(EMPTY_PLUGIN_CONTRIBUTIONS);
+  const [pluginBusyId, setPluginBusyId] = useState<string | null>(null);
   const [syncPresetWithMetadata, setSyncPresetWithMetadata] = useState(true);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [activeNavTarget, setActiveNavTarget] = useState<NavTarget>("document");
+  const screenRootRef = useRef<HTMLDivElement | null>(null);
+  const didMountScreenRef = useRef(false);
   const programmaticEditorUpdateRef = useRef(false);
 
   const pinResult = useMemo(() => evaluatePinPolicy(pin), [pin]);
@@ -406,13 +457,61 @@ export function App(): ReactElement {
     }
   });
 
+  async function refreshPlugins(): Promise<void> {
+    const pluginApi = window.secureDoc?.plugins;
+    if (!pluginApi) {
+      setPlugins([]);
+      setPluginContributions(EMPTY_PLUGIN_CONTRIBUTIONS);
+      return;
+    }
+
+    const [nextPlugins, nextContributions] = await Promise.all([pluginApi.list(), pluginApi.getContributions()]);
+    setPlugins(nextPlugins);
+    setPluginContributions(nextContributions);
+  }
+
+  async function handlePluginToggle(plugin: PluginDescriptor, enabled: boolean): Promise<void> {
+    const pluginApi = window.secureDoc?.plugins;
+    if (!pluginApi) {
+      setError("Electron plugin bridge is not available.");
+      return;
+    }
+
+    setPluginBusyId(plugin.id);
+    setError("");
+    try {
+      const nextPlugins = await pluginApi.setEnabled(plugin.id, enabled);
+      const nextContributions = await pluginApi.getContributions();
+      setPlugins(nextPlugins);
+      setPluginContributions(nextContributions);
+      setStatus(`${plugin.name} 플러그인을 ${enabled ? "활성화" : "비활성화"}했습니다.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "플러그인 상태를 변경하지 못했습니다.");
+    } finally {
+      setPluginBusyId(null);
+    }
+  }
+
   useEffect(() => {
     window.secureDoc?.getHistory().then(setHistory).catch(() => setHistory([]));
+    refreshPlugins().catch(() => {
+      setPlugins([]);
+      setPluginContributions(EMPTY_PLUGIN_CONTRIBUTIONS);
+    });
   }, []);
 
   useEffect(() => {
     editor?.commands.setContent(editorHtml, { emitUpdate: false });
   }, [editor]);
+
+  useEffect(() => {
+    if (!didMountScreenRef.current) {
+      didMountScreenRef.current = true;
+      return;
+    }
+
+    screenRootRef.current?.focus({ preventScroll: true });
+  }, [activeNavTarget]);
 
   useEffect(() => {
     if (!publishDialogOpen) {
@@ -437,6 +536,10 @@ export function App(): ReactElement {
     queueMicrotask(() => {
       programmaticEditorUpdateRef.current = false;
     });
+  }
+
+  function switchScreen(item: (typeof navigationItems)[number]): void {
+    setActiveNavTarget(item.id);
   }
 
   function buildPresetHtml(nextMetadata: MetadataState): string {
@@ -688,12 +791,20 @@ export function App(): ReactElement {
       <aside className="sidebar" aria-label="관리 메뉴">
         <div className="brand">Secure Doc</div>
         <nav className="nav">
-          <a href="#" className="active">문서 발행</a>
-          <a href="#">발행 이력</a>
-          <a href="#">보안 정책</a>
+          {navigationItems.map((item) => (
+            <button
+              type="button"
+              key={item.id}
+              className={activeNavTarget === item.id ? "active" : ""}
+              aria-current={activeNavTarget === item.id ? "page" : undefined}
+              onClick={() => switchScreen(item)}
+            >
+              {item.label}
+            </button>
+          ))}
           <span className="group-label">배포 대상</span>
-          <a href="#">macOS universal</a>
-          <a href="#">Windows x64</a>
+          <span className="nav-note">macOS universal</span>
+          <span className="nav-note">Windows x64</span>
         </nav>
       </aside>
 
@@ -709,8 +820,13 @@ export function App(): ReactElement {
           </div>
         </header>
 
-        <div className="workspace">
-        <section className="panel metadata-panel" aria-labelledby="metadata-heading">
+        <div className="workspace" ref={screenRootRef} tabIndex={-1}>
+        {activeNavTarget === "document" && (
+          <>
+        <section
+          className="panel metadata-panel"
+          aria-labelledby="metadata-heading"
+        >
           <div className="section-heading">
             <h2 id="metadata-heading">문서 기본정보</h2>
           </div>
@@ -981,8 +1097,43 @@ export function App(): ReactElement {
           {status && <div className="status">{status}</div>}
           {error && <div className="error">{error}</div>}
         </section>
+          </>
+        )}
 
-        <section className="panel history-panel" aria-labelledby="history-heading">
+        {activeNavTarget === "security" && (
+        <section
+          className="panel security-panel"
+          aria-labelledby="security-heading"
+        >
+          <div className="section-heading">
+            <h2 id="security-heading">보안 정책</h2>
+          </div>
+          <div className="security-policy-grid">
+            <div className="security-policy-item">
+              <strong>PIN</strong>
+              <span>6-15자 편의형 암호, 원문/해시 저장 금지</span>
+            </div>
+            <div className="security-policy-item">
+              <strong>암호화</strong>
+              <span>PBKDF2-HMAC-SHA-256, AES-256-GCM, DEK/KEK 분리</span>
+            </div>
+            <div className="security-policy-item">
+              <strong>뷰어</strong>
+              <span>오프라인 single HTML, 외부 연결 차단 CSP 유지</span>
+            </div>
+            <div className="security-policy-item">
+              <strong>저장 금지</strong>
+              <span>평문 본문, PIN, PIN hash, DEK, KEK</span>
+            </div>
+          </div>
+        </section>
+        )}
+
+        {activeNavTarget === "history" && (
+        <section
+          className="panel history-panel"
+          aria-labelledby="history-heading"
+        >
           <div className="section-heading">
             <h2 id="history-heading">발행 이력</h2>
           </div>
@@ -1024,6 +1175,76 @@ export function App(): ReactElement {
             </table>
           </div>
         </section>
+        )}
+
+        {activeNavTarget === "plugins" && (
+        <section
+          className="panel plugins-panel"
+          aria-labelledby="plugins-heading"
+        >
+          <div className="section-heading">
+            <h2 id="plugins-heading">플러그인</h2>
+          </div>
+          <div className="plugin-list">
+            {plugins.length === 0 ? (
+              <div className="plugin-empty">등록된 built-in 플러그인이 없습니다.</div>
+            ) : (
+              plugins.map((plugin) => {
+                const contributionLabels = pluginContributionLabels(plugin);
+                return (
+                  <article className="plugin-item" key={plugin.id}>
+                    <div className="plugin-item-main">
+                      <div>
+                        <div className="plugin-title-row">
+                          <h3>{plugin.name}</h3>
+                          <span className="plugin-category">{plugin.category}</span>
+                        </div>
+                        <p>{plugin.description}</p>
+                        <div className="plugin-meta">
+                          <span>{plugin.id}</span>
+                          <span>v{plugin.version}</span>
+                        </div>
+                      </div>
+                      <label className="plugin-toggle">
+                        <input
+                          type="checkbox"
+                          checked={plugin.enabled}
+                          disabled={pluginBusyId === plugin.id}
+                          onChange={(event) => void handlePluginToggle(plugin, event.target.checked)}
+                        />
+                        <span>{plugin.enabled ? "활성" : "비활성"}</span>
+                      </label>
+                    </div>
+                    <div className="plugin-chip-row" aria-label={`${plugin.name} 권한`}>
+                      {plugin.permissions.length === 0 ? (
+                        <span className="plugin-chip muted">권한 없음</span>
+                      ) : (
+                        plugin.permissions.map((permission) => (
+                          <span className="plugin-chip" key={permission}>
+                            {pluginPermissionLabel(permission)}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                    <div className="plugin-chip-row" aria-label={`${plugin.name} 확장 지점`}>
+                      {contributionLabels.map((label) => (
+                        <span className="plugin-chip contribution" key={label}>
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+          {pluginContributions.publishActions.length > 0 && (
+            <div className="plugin-contribution-summary">
+              활성 발행 액션: {pluginContributions.publishActions.map((action) => action.label).join(", ")}
+            </div>
+          )}
+        </section>
+        )}
         </div>
       </main>
       {publishDialogOpen && (

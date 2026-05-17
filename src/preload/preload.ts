@@ -10,6 +10,17 @@ const api: SecureDocDesktopApi = {
   },
   showItemInFolder(filePath: string) {
     return ipcRenderer.invoke("secure-doc:show-item-in-folder", filePath);
+  },
+  plugins: {
+    list() {
+      return ipcRenderer.invoke("secure-doc:plugins:list");
+    },
+    setEnabled(pluginId: string, enabled: boolean) {
+      return ipcRenderer.invoke("secure-doc:plugins:set-enabled", pluginId, enabled);
+    },
+    getContributions() {
+      return ipcRenderer.invoke("secure-doc:plugins:get-contributions");
+    }
   }
 };
 
