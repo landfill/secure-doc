@@ -36,7 +36,7 @@ The document screen lets the user choose and apply a template. Applying a templa
 
 After a template is applied, metadata fields that are part of the body placeholder set keep the body synchronized until the user manually edits the body.
 
-Changing the document type is metadata-only. It can move the template selector to a matching template for discoverability, but it must not apply template defaults or replace the body. Body replacement remains an explicit template-apply action.
+Changing the document type is metadata-only. It can move the template selector to a matching template for discoverability, but it must not apply template defaults or replace the body. The renderer marks whether the selected template is already applied to the body so the next action stays visible. Body replacement remains an explicit template-apply action.
 
 ## Future Template Packs
 

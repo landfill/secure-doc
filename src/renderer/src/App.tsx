@@ -667,6 +667,12 @@ export function App(): ReactElement {
     () => (pendingTemplateOverwriteId ? getDocumentTemplateById(pendingTemplateOverwriteId, availableDocumentTemplates) ?? null : null),
     [availableDocumentTemplates, pendingTemplateOverwriteId]
   );
+  const templateApplyPending = selectedTemplate.id !== activeTemplate.id;
+  const templateBodyState = templateApplyPending ? "pending" : syncPresetWithMetadata ? "applied" : "custom";
+  const templateBodyStateLabel =
+    templateBodyState === "pending" ? "본문 미적용" : templateBodyState === "custom" ? "본문 편집됨" : "본문 적용됨";
+  const selectedTemplateDocType = selectedTemplate.defaultMetadata.docType;
+  const templateDocTypeMatches = selectedTemplateDocType === metadata.docType;
   const activeBrandingPresets = pluginContributions.brandingPresets;
   const selectedBrandingPreset =
     activeBrandingPresets.find((preset) => brandingPresetKey(preset) === selectedBrandingPresetKey) ?? null;
@@ -999,6 +1005,13 @@ export function App(): ReactElement {
     if (matchingTemplate) {
       setSelectedTemplateId(matchingTemplate.id);
     }
+
+    setStatus(
+      matchingTemplate
+        ? `${docType} 문서 유형으로 분류했습니다. ${matchingTemplate.name} 템플릿을 선택했고 본문은 유지됩니다.`
+        : `${docType} 문서 유형으로 분류했습니다. 본문은 유지됩니다.`
+    );
+    setError("");
   }
 
   function switchEditorMode(nextMode: EditorMode): void {
@@ -1536,7 +1549,7 @@ export function App(): ReactElement {
           </div>
           <div className="form-grid document-meta-grid">
             <label className="field-type">
-              문서 유형
+              문서 유형(분류)
               <select value={metadata.docType} onChange={(event) => handleDocumentTypeChange(event.target.value as DocumentType)}>
                 {documentTypes.map((docType) => (
                   <option key={docType} value={docType}>
@@ -1588,9 +1601,21 @@ export function App(): ReactElement {
             <div className="template-summary">
               <strong>{selectedTemplate.name}</strong>
               <span>{selectedTemplate.description}</span>
+              <div className="template-state-row" aria-label="템플릿 적용 상태">
+                <span className={["template-state-badge", templateBodyState].join(" ")}>
+                  {templateBodyStateLabel}
+                </span>
+                <span className="template-state-note">
+                  {templateDocTypeMatches ? "선택 유형과 일치" : `템플릿 유형: ${selectedTemplateDocType ?? "없음"}`}
+                </span>
+              </div>
             </div>
-            <button type="button" className="template-apply-button" onClick={handleApplySelectedTemplate}>
-              템플릿 적용
+            <button
+              type="button"
+              className={["template-apply-button", templateApplyPending ? "pending" : ""].filter(Boolean).join(" ")}
+              onClick={handleApplySelectedTemplate}
+            >
+              본문에 템플릿 적용
             </button>
           </div>
           {activeBrandingPresets.length > 0 && (
