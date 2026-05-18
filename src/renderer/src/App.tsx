@@ -39,6 +39,7 @@ import {
   applyDocumentTemplateDefaults,
   buildDocumentTemplateBodyHtml,
   getDocumentTemplateById,
+  resolveAvailableDocumentTemplates,
   type DocumentTemplate,
   type DocumentTemplateCategory,
   type DocumentTemplateMetadata
@@ -208,7 +209,8 @@ function pluginPermissionLabel(permission: PluginPermission): string {
 }
 
 function templateOptionLabel(template: DocumentTemplate): string {
-  return `${templateCategoryLabels[template.category]} · ${template.name}`;
+  const sourceLabel = template.pluginName ? `${template.pluginName} / ` : "";
+  return `${sourceLabel}${templateCategoryLabels[template.category]} · ${template.name}`;
 }
 
 function pluginDisplayName(plugin: PluginDescriptor): string {
@@ -649,17 +651,21 @@ export function App(): ReactElement {
     }
     return items;
   }, [effectivePublishPolicy]);
+  const availableDocumentTemplates = useMemo(
+    () => resolveAvailableDocumentTemplates(pluginContributions.templates),
+    [pluginContributions.templates]
+  );
   const selectedTemplate = useMemo(
-    () => getDocumentTemplateById(selectedTemplateId) ?? defaultDocumentTemplate,
-    [selectedTemplateId]
+    () => getDocumentTemplateById(selectedTemplateId, availableDocumentTemplates) ?? defaultDocumentTemplate,
+    [availableDocumentTemplates, selectedTemplateId]
   );
   const activeTemplate = useMemo(
-    () => getDocumentTemplateById(activeTemplateId) ?? defaultDocumentTemplate,
-    [activeTemplateId]
+    () => getDocumentTemplateById(activeTemplateId, availableDocumentTemplates) ?? defaultDocumentTemplate,
+    [activeTemplateId, availableDocumentTemplates]
   );
   const pendingTemplateOverwrite = useMemo(
-    () => (pendingTemplateOverwriteId ? getDocumentTemplateById(pendingTemplateOverwriteId) ?? null : null),
-    [pendingTemplateOverwriteId]
+    () => (pendingTemplateOverwriteId ? getDocumentTemplateById(pendingTemplateOverwriteId, availableDocumentTemplates) ?? null : null),
+    [availableDocumentTemplates, pendingTemplateOverwriteId]
   );
   const activeBrandingPresets = pluginContributions.brandingPresets;
   const selectedBrandingPreset =
@@ -821,6 +827,20 @@ export function App(): ReactElement {
   }, [activeBrandingPresetKey, activeBrandingPresets, selectedBrandingPresetKey]);
 
   useEffect(() => {
+    const templateIds = new Set(availableDocumentTemplates.map((template) => template.id));
+    if (selectedTemplateId && !templateIds.has(selectedTemplateId)) {
+      setSelectedTemplateId(DEFAULT_DOCUMENT_TEMPLATE_ID);
+    }
+    if (pendingTemplateOverwriteId && !templateIds.has(pendingTemplateOverwriteId)) {
+      setPendingTemplateOverwriteId("");
+    }
+    if (activeTemplateId && !templateIds.has(activeTemplateId)) {
+      setActiveTemplateId(DEFAULT_DOCUMENT_TEMPLATE_ID);
+      setSyncPresetWithMetadata(false);
+    }
+  }, [activeTemplateId, availableDocumentTemplates, pendingTemplateOverwriteId, selectedTemplateId]);
+
+  useEffect(() => {
     editor?.commands.setContent(editorHtml, { emitUpdate: false });
   }, [editor]);
 
@@ -973,13 +993,12 @@ export function App(): ReactElement {
   }
 
   function handleDocumentTypeChange(docType: DocumentType): void {
-    const matchingTemplate = CORE_DOCUMENT_TEMPLATES.find((template) => template.defaultMetadata.docType === docType);
-    if (matchingTemplate) {
-      applyTemplate(matchingTemplate);
-      return;
-    }
-
     updateMetadata("docType", docType);
+
+    const matchingTemplate = availableDocumentTemplates.find((template) => template.defaultMetadata.docType === docType);
+    if (matchingTemplate) {
+      setSelectedTemplateId(matchingTemplate.id);
+    }
   }
 
   function switchEditorMode(nextMode: EditorMode): void {
@@ -1559,7 +1578,7 @@ export function App(): ReactElement {
             <label>
               템플릿
               <select value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)}>
-                {CORE_DOCUMENT_TEMPLATES.map((template) => (
+                {availableDocumentTemplates.map((template) => (
                   <option key={template.id} value={template.id}>
                     {templateOptionLabel(template)}
                   </option>

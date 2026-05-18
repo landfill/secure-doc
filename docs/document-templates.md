@@ -36,8 +36,10 @@ The document screen lets the user choose and apply a template. Applying a templa
 
 After a template is applied, metadata fields that are part of the body placeholder set keep the body synchronized until the user manually edits the body.
 
+Changing the document type is metadata-only. It can move the template selector to a matching template for discoverability, but it must not apply template defaults or replace the body. Body replacement remains an explicit template-apply action.
+
 ## Future Template Packs
 
-Template-pack plugins should contribute template ids through `contributes.templates`. The content itself should remain static data or a safe builder shipped with the trusted app bundle; renderer code should not execute arbitrary third-party plugin code.
+Template-pack plugins should contribute template ids through `contributes.templates`. The renderer resolves those ids against the trusted bundled template registry before showing them. Unknown ids are ignored, and the content itself should remain static data or a safe builder shipped with the trusted app bundle; renderer code should not execute arbitrary third-party plugin code.
 
 Template packs should require no network, secret storage, or package read permission unless a future design explicitly adds a reviewed capability.

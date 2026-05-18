@@ -7,6 +7,8 @@ import {
   applyDocumentTemplateDefaults,
   buildDocumentTemplateBodyHtml,
   getDocumentTemplateById,
+  resolveAvailableDocumentTemplates,
+  type DocumentTemplate,
   type DocumentTemplateMetadata
 } from "../src/shared/documentTemplates.ts";
 
@@ -37,6 +39,59 @@ test("core document template registry exposes stable safe defaults", () => {
     assert.ok(template?.defaultMetadata.docType);
     assert.ok(template?.defaultMetadata.watermarkText);
   }
+});
+
+test("plugin template contributions resolve only against trusted bundled templates", () => {
+  const baseTemplate = getDocumentTemplateById("core.notice");
+  assert.ok(baseTemplate);
+  const pluginTemplate: DocumentTemplate = {
+    id: "template-pack.legal.basic",
+    pluginId: "template-pack.legal",
+    name: "Bundled legal template",
+    description: "Bundled legal body.",
+    category: "contract",
+    defaultMetadata: {
+      title: "Legal template",
+      docType: "Contract"
+    },
+    buildBodyHtml(metadata) {
+      return `<h1>${metadata.title}</h1>`;
+    }
+  };
+
+  const resolved = resolveAvailableDocumentTemplates(
+    [
+      {
+        id: pluginTemplate.id,
+        label: "Legal pack template",
+        description: "Template surfaced by an enabled plugin.",
+        pluginId: "template-pack.legal",
+        pluginName: "Legal Template Pack"
+      },
+      {
+        id: "template-pack.missing",
+        label: "Missing template",
+        description: "This contribution should be ignored because no bundled builder exists.",
+        pluginId: "template-pack.legal",
+        pluginName: "Legal Template Pack"
+      },
+      {
+        id: baseTemplate.id,
+        label: "Duplicate core notice",
+        description: "Core templates should not be duplicated by plugin contributions.",
+        pluginId: "template-pack.legal",
+        pluginName: "Legal Template Pack"
+      }
+    ],
+    [baseTemplate],
+    [baseTemplate, pluginTemplate]
+  );
+
+  assert.deepEqual(resolved.map((template) => template.id), [baseTemplate.id, pluginTemplate.id]);
+  assert.equal(resolved[1].pluginId, "template-pack.legal");
+  assert.equal(resolved[1].pluginName, "Legal Template Pack");
+  assert.equal(resolved[1].name, "Legal pack template");
+  assert.equal(resolved[1].description, "Template surfaced by an enabled plugin.");
 });
 
 test("template defaults update metadata without dropping operator fields", () => {
