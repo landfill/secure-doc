@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -12,6 +12,7 @@ import type {
 import {
   AUDIT_INTEGRITY_HISTORY_ACTION_ID,
   AUDIT_INTEGRITY_PLUGIN_ID,
+  COMPANY_DEFAULT_BRANDING_PLUGIN_ID,
   EMPTY_PLUGIN_CONTRIBUTIONS,
   GENERIC_SMTP_HISTORY_SEND_ACTION_ID,
   GENERIC_SMTP_PLUGIN_ID,
@@ -28,14 +29,18 @@ import {
   type PluginContributions,
   type PluginDescriptor,
   type PluginPermission,
+  type ResolvedPluginBrandingPresetContribution,
   type SmtpDeliveryPluginId
 } from "../../shared/plugins";
+import { compactViewerTheme } from "../../shared/branding";
+import type { SecureDocViewerTheme } from "../../shared/branding";
 import {
   CORE_DOCUMENT_TEMPLATES,
   DEFAULT_DOCUMENT_TEMPLATE_ID,
   applyDocumentTemplateDefaults,
   buildDocumentTemplateBodyHtml,
   getDocumentTemplateById,
+  resolveAvailableDocumentTemplates,
   type DocumentTemplate,
   type DocumentTemplateCategory,
   type DocumentTemplateMetadata
@@ -124,6 +129,13 @@ type SmtpActionSelection = {
   actionId: string;
 };
 
+type BrandingPresetSnapshot = {
+  pluginId: string;
+  presetId: string;
+  label: string;
+  viewerTheme?: ResolvedPluginBrandingPresetContribution["viewerTheme"];
+};
+
 const textAlignments: TextAlign[] = ["left", "center", "right", "justify"];
 
 const defaultSmtpSettingsForms: Record<SmtpDeliveryPluginId, SmtpSettingsForm> = {
@@ -198,7 +210,8 @@ function pluginPermissionLabel(permission: PluginPermission): string {
 }
 
 function templateOptionLabel(template: DocumentTemplate): string {
-  return `${templateCategoryLabels[template.category]} · ${template.name}`;
+  const sourceLabel = template.pluginName ? `${template.pluginName} / ` : "";
+  return `${sourceLabel}${templateCategoryLabels[template.category]} · ${template.name}`;
 }
 
 function pluginDisplayName(plugin: PluginDescriptor): string {
@@ -210,6 +223,9 @@ function pluginDisplayName(plugin: PluginDescriptor): string {
   }
   if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
     return "패키지 무결성 감사";
+  }
+  if (plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID) {
+    return "조직 기본 브랜딩";
   }
   if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
     return "엄격 발행 정책";
@@ -226,6 +242,9 @@ function pluginDisplayDescription(plugin: PluginDescriptor): string {
   }
   if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
     return "저장된 보안 HTML 파일이 발행 당시 기록된 SHA-256 해시와 일치하는지 검사합니다.";
+  }
+  if (plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID) {
+    return "조직명, 기본 워터마크, 오프라인 viewer 색상 preset을 발행 문서에 적용합니다.";
   }
   if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
     return "문서 발행 전 더 긴 PIN, 강한 KDF, 필수 메타데이터 입력을 요구합니다.";
@@ -262,6 +281,13 @@ function pluginFeatureDescriptions(plugin: PluginDescriptor): string[] {
       "PIN, PIN hash, 평문 본문, 암호화 키를 저장하지 않는 선언형 정책입니다."
     ];
   }
+  if (plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID) {
+    return [
+      "문서 기본정보에 조직 발행자와 기본 워터마크 preset을 적용합니다.",
+      "viewer 색상은 패키지 내부의 암호화된 private metadata로만 전달됩니다.",
+      "원격 이미지, 외부 폰트, 외부 네트워크 리소스를 사용하지 않습니다."
+    ];
+  }
 
   const descriptions: string[] = [];
   if (plugin.contributes.settingsPanel) {
@@ -278,6 +304,9 @@ function pluginFeatureDescriptions(plugin: PluginDescriptor): string[] {
   }
   for (const policyProfile of plugin.contributes.policyProfiles ?? []) {
     descriptions.push(`발행 정책: ${policyProfile.description}`);
+  }
+  for (const brandingPreset of plugin.contributes.brandingPresets ?? []) {
+    descriptions.push(`브랜딩 preset: ${brandingPreset.description}`);
   }
   return descriptions;
 }
@@ -298,6 +327,9 @@ function pluginContributionLabels(plugin: PluginDescriptor): string[] {
   }
   if (plugin.contributes.policyProfiles?.length) {
     labels.push("정책 preset");
+  }
+  if (plugin.contributes.brandingPresets?.length) {
+    labels.push("브랜딩 preset");
   }
   return labels;
 }
@@ -521,13 +553,76 @@ function safeFileNamePart(value: string): string {
   return value.normalize("NFKC").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-") || "secure-document";
 }
 
-function compactPrivateMeta(metadata: MetadataState): SecureDocPlainContent["privateMeta"] {
+function brandingPresetKey(preset: Pick<ResolvedPluginBrandingPresetContribution, "pluginId" | "id">): string {
+  return `${preset.pluginId}:${preset.id}`;
+}
+
+function brandingSnapshot(preset: ResolvedPluginBrandingPresetContribution | null): BrandingPresetSnapshot | undefined {
+  if (!preset) {
+    return undefined;
+  }
+
+  const viewerTheme = compactViewerTheme(preset.viewerTheme);
+  return {
+    pluginId: preset.pluginId,
+    presetId: preset.id,
+    label: preset.label,
+    viewerTheme
+  };
+}
+
+function brandingPresetMetadataMatches(
+  preset: ResolvedPluginBrandingPresetContribution,
+  metadata: Pick<MetadataState, "issuer" | "watermarkText">
+): boolean {
+  const issuerMatches = preset.issuer === undefined || metadata.issuer === preset.issuer;
+  const watermarkMatches = preset.watermarkText === undefined || metadata.watermarkText === preset.watermarkText;
+  return issuerMatches && watermarkMatches;
+}
+
+function brandingPresetEffectItems(preset: ResolvedPluginBrandingPresetContribution): string[] {
+  const items: string[] = [];
+  if (preset.issuer) {
+    items.push(`발행자: ${preset.issuer}`);
+  }
+  if (preset.watermarkText) {
+    items.push(`워터마크: ${preset.watermarkText}`);
+  }
+  if (compactViewerTheme(preset.viewerTheme)) {
+    items.push("문서/viewer 컬러셋");
+  }
+  return items;
+}
+
+function documentBrandingStyle(theme: SecureDocViewerTheme | undefined): CSSProperties | undefined {
+  const compactTheme = compactViewerTheme(theme);
+  if (!compactTheme) {
+    return undefined;
+  }
+
+  return {
+    "--document-accent": compactTheme.accentColor,
+    "--document-accent-soft": compactTheme.accentSoftColor,
+    "--document-bg": compactTheme.backgroundColor,
+    "--document-surface": compactTheme.surfaceColor,
+    "--document-text": compactTheme.textColor,
+    "--document-muted": compactTheme.mutedTextColor,
+    "--document-border": compactTheme.documentBorderColor ?? compactTheme.accentColor,
+    "--document-line": compactTheme.borderColor
+  } as CSSProperties;
+}
+
+function compactPrivateMeta(
+  metadata: MetadataState,
+  brandingPreset: ResolvedPluginBrandingPresetContribution | null
+): SecureDocPlainContent["privateMeta"] {
   return {
     description: metadata.description || undefined,
     docType: metadata.docType || undefined,
     watermarkText: metadata.watermarkText || undefined,
     recipientName: metadata.recipientName || undefined,
-    documentNumber: metadata.documentNumber || undefined
+    documentNumber: metadata.documentNumber || undefined,
+    branding: brandingSnapshot(brandingPreset)
   };
 }
 
@@ -574,6 +669,9 @@ export function App(): ReactElement {
   const [activeNavTarget, setActiveNavTarget] = useState<NavTarget>("document");
   const [selectedTemplateId, setSelectedTemplateId] = useState(DEFAULT_DOCUMENT_TEMPLATE_ID);
   const [activeTemplateId, setActiveTemplateId] = useState(DEFAULT_DOCUMENT_TEMPLATE_ID);
+  const [selectedBrandingPresetKey, setSelectedBrandingPresetKey] = useState("");
+  const [activeBrandingPresetKey, setActiveBrandingPresetKey] = useState("");
+  const [pendingTemplateOverwriteId, setPendingTemplateOverwriteId] = useState("");
   const screenRootRef = useRef<HTMLDivElement | null>(null);
   const didMountScreenRef = useRef(false);
   const programmaticEditorUpdateRef = useRef(false);
@@ -595,13 +693,58 @@ export function App(): ReactElement {
     }
     return items;
   }, [effectivePublishPolicy]);
+  const availableDocumentTemplates = useMemo(
+    () => resolveAvailableDocumentTemplates(pluginContributions.templates),
+    [pluginContributions.templates]
+  );
   const selectedTemplate = useMemo(
-    () => getDocumentTemplateById(selectedTemplateId) ?? defaultDocumentTemplate,
-    [selectedTemplateId]
+    () => getDocumentTemplateById(selectedTemplateId, availableDocumentTemplates) ?? defaultDocumentTemplate,
+    [availableDocumentTemplates, selectedTemplateId]
   );
   const activeTemplate = useMemo(
-    () => getDocumentTemplateById(activeTemplateId) ?? defaultDocumentTemplate,
-    [activeTemplateId]
+    () => getDocumentTemplateById(activeTemplateId, availableDocumentTemplates) ?? defaultDocumentTemplate,
+    [activeTemplateId, availableDocumentTemplates]
+  );
+  const pendingTemplateOverwrite = useMemo(
+    () => (pendingTemplateOverwriteId ? getDocumentTemplateById(pendingTemplateOverwriteId, availableDocumentTemplates) ?? null : null),
+    [availableDocumentTemplates, pendingTemplateOverwriteId]
+  );
+  const templateApplyPending = selectedTemplate.id !== activeTemplate.id;
+  const templateBodyState = templateApplyPending ? "pending" : syncPresetWithMetadata ? "applied" : "custom";
+  const templateBodyStateLabel =
+    templateBodyState === "pending" ? "본문 미적용" : templateBodyState === "custom" ? "본문 편집됨" : "본문 적용됨";
+  const selectedTemplateDocType = selectedTemplate.defaultMetadata.docType;
+  const templateDocTypeMatches = selectedTemplateDocType === metadata.docType;
+  const activeBrandingPresets = pluginContributions.brandingPresets;
+  const selectedBrandingPreset =
+    activeBrandingPresets.find((preset) => brandingPresetKey(preset) === selectedBrandingPresetKey) ?? null;
+  const activeBrandingPreset =
+    activeBrandingPresets.find((preset) => brandingPresetKey(preset) === activeBrandingPresetKey) ?? null;
+  const selectedBrandingPresetResolvedKey = selectedBrandingPreset ? brandingPresetKey(selectedBrandingPreset) : "";
+  const selectedBrandingPresetIsActive = Boolean(
+    selectedBrandingPreset && selectedBrandingPresetResolvedKey === activeBrandingPresetKey
+  );
+  const selectedBrandingMetadataChanged = Boolean(
+    selectedBrandingPreset &&
+      selectedBrandingPresetIsActive &&
+      !brandingPresetMetadataMatches(selectedBrandingPreset, metadata)
+  );
+  const brandingApplyPending = Boolean(
+    selectedBrandingPreset && (!selectedBrandingPresetIsActive || selectedBrandingMetadataChanged)
+  );
+  const brandingBodyState = !selectedBrandingPreset
+    ? "empty"
+    : !selectedBrandingPresetIsActive
+      ? "pending"
+      : selectedBrandingMetadataChanged
+        ? "custom"
+        : "applied";
+  const brandingBodyStateLabel =
+    brandingBodyState === "pending" ? "브랜딩 미적용" : brandingBodyState === "custom" ? "값 수정됨" : brandingBodyState === "applied" ? "브랜딩 적용됨" : "선택 없음";
+  const selectedBrandingEffectItems = selectedBrandingPreset ? brandingPresetEffectItems(selectedBrandingPreset) : [];
+  const activeDocumentBrandingStyle = useMemo(
+    () => documentBrandingStyle(activeBrandingPreset?.viewerTheme),
+    [activeBrandingPreset]
   );
   const pinResult = useMemo(
     () => evaluatePinPolicy(pin, { minLength: effectivePublishPolicy.minimumPinLength }),
@@ -633,7 +776,9 @@ export function App(): ReactElement {
   const auditHistoryActionEnabled = hasActiveAuditIntegrityHistoryAction(pluginContributions);
   const activeContributionBadges = [
     ...pluginContributions.publishActions.map((action) => `발행: ${action.label}`),
-    ...pluginContributions.policyProfiles.map((profile) => `정책: ${profile.label}`)
+    ...pluginContributions.templates.map((template) => `템플릿: ${template.label}`),
+    ...pluginContributions.policyProfiles.map((profile) => `정책: ${profile.label}`),
+    ...pluginContributions.brandingPresets.map((preset) => `브랜딩: ${preset.label}`)
   ];
   const editor = useEditor({
     extensions: [
@@ -741,6 +886,32 @@ export function App(): ReactElement {
   }, []);
 
   useEffect(() => {
+    const presetKeys = new Set(activeBrandingPresets.map(brandingPresetKey));
+    if (selectedBrandingPresetKey && !presetKeys.has(selectedBrandingPresetKey)) {
+      setSelectedBrandingPresetKey(activeBrandingPresets[0] ? brandingPresetKey(activeBrandingPresets[0]) : "");
+    } else if (!selectedBrandingPresetKey && activeBrandingPresets.length > 0) {
+      setSelectedBrandingPresetKey(brandingPresetKey(activeBrandingPresets[0]));
+    }
+    if (activeBrandingPresetKey && !presetKeys.has(activeBrandingPresetKey)) {
+      setActiveBrandingPresetKey("");
+    }
+  }, [activeBrandingPresetKey, activeBrandingPresets, selectedBrandingPresetKey]);
+
+  useEffect(() => {
+    const templateIds = new Set(availableDocumentTemplates.map((template) => template.id));
+    if (selectedTemplateId && !templateIds.has(selectedTemplateId)) {
+      setSelectedTemplateId(DEFAULT_DOCUMENT_TEMPLATE_ID);
+    }
+    if (pendingTemplateOverwriteId && !templateIds.has(pendingTemplateOverwriteId)) {
+      setPendingTemplateOverwriteId("");
+    }
+    if (activeTemplateId && !templateIds.has(activeTemplateId)) {
+      setActiveTemplateId(DEFAULT_DOCUMENT_TEMPLATE_ID);
+      setSyncPresetWithMetadata(false);
+    }
+  }, [activeTemplateId, availableDocumentTemplates, pendingTemplateOverwriteId, selectedTemplateId]);
+
+  useEffect(() => {
     editor?.commands.setContent(editorHtml, { emitUpdate: false });
   }, [editor]);
 
@@ -806,6 +977,10 @@ export function App(): ReactElement {
   }
 
   function shouldConfirmTemplateOverwrite(nextHtml: string): boolean {
+    if (selectedTemplateId === activeTemplateId && syncPresetWithMetadata) {
+      return false;
+    }
+
     const currentHtml = currentEditorHtmlSnapshot();
     return stripHtml(currentHtml).length > 0 && currentHtml !== sanitizeHtml(nextHtml);
   }
@@ -816,15 +991,18 @@ export function App(): ReactElement {
 
     if (
       confirmOverwrite &&
-      shouldConfirmTemplateOverwrite(nextHtml) &&
-      !window.confirm("현재 본문을 선택한 템플릿으로 덮어씁니다. 계속할까요?")
+      shouldConfirmTemplateOverwrite(nextHtml)
     ) {
+      setPendingTemplateOverwriteId(template.id);
+      setStatus("");
+      setError("");
       return;
     }
 
     setMetadata(nextMetadata);
     setSelectedTemplateId(template.id);
     setActiveTemplateId(template.id);
+    setPendingTemplateOverwriteId("");
     setSyncPresetWithMetadata(true);
     replaceEditorHtml(nextHtml);
     setStatus(`${template.name} 템플릿을 본문에 적용했습니다.`);
@@ -833,6 +1011,49 @@ export function App(): ReactElement {
 
   function handleApplySelectedTemplate(): void {
     applyTemplate(selectedTemplate);
+  }
+
+  function closeTemplateOverwriteDialog(): void {
+    setPendingTemplateOverwriteId("");
+  }
+
+  function confirmTemplateOverwrite(): void {
+    if (pendingTemplateOverwrite) {
+      applyTemplate(pendingTemplateOverwrite, false);
+    }
+  }
+
+  function applyBrandingPreset(preset: ResolvedPluginBrandingPresetContribution | null): void {
+    if (!preset) {
+      setActiveBrandingPresetKey("");
+      setStatus("브랜딩 preset 적용을 해제했습니다.");
+      setError("");
+      return;
+    }
+
+    const nextMetadata = {
+      ...metadata,
+      issuer: preset.issuer ?? metadata.issuer,
+      watermarkText: preset.watermarkText ?? metadata.watermarkText
+    };
+
+    setMetadata(nextMetadata);
+    setSelectedBrandingPresetKey(brandingPresetKey(preset));
+    setActiveBrandingPresetKey(brandingPresetKey(preset));
+    if (syncPresetWithMetadata && preset.issuer !== undefined) {
+      replaceEditorHtml(buildTemplateHtml(activeTemplate, nextMetadata));
+    }
+    const effectItems = brandingPresetEffectItems(preset);
+    setStatus(
+      effectItems.length > 0
+        ? `${preset.label} 브랜딩을 적용했습니다. ${effectItems.join(", ")} 항목이 반영됩니다.`
+        : `${preset.label} 브랜딩을 적용했습니다.`
+    );
+    setError("");
+  }
+
+  function handleApplySelectedBrandingPreset(): void {
+    applyBrandingPreset(selectedBrandingPreset);
   }
 
   function updateMetadata<K extends keyof MetadataState>(key: K, value: MetadataState[K]): void {
@@ -848,13 +1069,19 @@ export function App(): ReactElement {
   }
 
   function handleDocumentTypeChange(docType: DocumentType): void {
-    const matchingTemplate = CORE_DOCUMENT_TEMPLATES.find((template) => template.defaultMetadata.docType === docType);
+    updateMetadata("docType", docType);
+
+    const matchingTemplate = availableDocumentTemplates.find((template) => template.defaultMetadata.docType === docType);
     if (matchingTemplate) {
-      applyTemplate(matchingTemplate);
-      return;
+      setSelectedTemplateId(matchingTemplate.id);
     }
 
-    updateMetadata("docType", docType);
+    setStatus(
+      matchingTemplate
+        ? `${docType} 문서 유형으로 분류했습니다. ${matchingTemplate.name} 템플릿을 선택했고 본문은 유지됩니다.`
+        : `${docType} 문서 유형으로 분류했습니다. 본문은 유지됩니다.`
+    );
+    setError("");
   }
 
   function switchEditorMode(nextMode: EditorMode): void {
@@ -1277,7 +1504,7 @@ export function App(): ReactElement {
         format: "html",
         html: sanitizedPreview,
         assets: [],
-        privateMeta: compactPrivateMeta(publishMetadata)
+        privateMeta: compactPrivateMeta(publishMetadata, activeBrandingPreset)
       };
 
       const securePackage = await issueSecureDocument({
@@ -1392,7 +1619,7 @@ export function App(): ReactElement {
           </div>
           <div className="form-grid document-meta-grid">
             <label className="field-type">
-              문서 유형
+              문서 유형(분류)
               <select value={metadata.docType} onChange={(event) => handleDocumentTypeChange(event.target.value as DocumentType)}>
                 {documentTypes.map((docType) => (
                   <option key={docType} value={docType}>
@@ -1434,7 +1661,7 @@ export function App(): ReactElement {
             <label>
               템플릿
               <select value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)}>
-                {CORE_DOCUMENT_TEMPLATES.map((template) => (
+                {availableDocumentTemplates.map((template) => (
                   <option key={template.id} value={template.id}>
                     {templateOptionLabel(template)}
                   </option>
@@ -1444,11 +1671,75 @@ export function App(): ReactElement {
             <div className="template-summary">
               <strong>{selectedTemplate.name}</strong>
               <span>{selectedTemplate.description}</span>
+              <div className="template-state-row" aria-label="템플릿 적용 상태">
+                <span className={["template-state-badge", templateBodyState].join(" ")}>
+                  {templateBodyStateLabel}
+                </span>
+                <span className="template-state-note">
+                  {templateDocTypeMatches ? "선택 유형과 일치" : `템플릿 유형: ${selectedTemplateDocType ?? "없음"}`}
+                </span>
+              </div>
             </div>
-            <button type="button" className="template-apply-button" onClick={handleApplySelectedTemplate}>
-              템플릿 적용
+            <button
+              type="button"
+              className={["template-apply-button", templateApplyPending ? "pending" : ""].filter(Boolean).join(" ")}
+              onClick={handleApplySelectedTemplate}
+            >
+              본문에 템플릿 적용
             </button>
           </div>
+          {activeBrandingPresets.length > 0 && (
+            <div className="branding-picker">
+              <label>
+                브랜딩
+                <select
+                  value={selectedBrandingPresetKey}
+                  onChange={(event) => setSelectedBrandingPresetKey(event.target.value)}
+                >
+                  {activeBrandingPresets.map((preset) => (
+                    <option key={brandingPresetKey(preset)} value={brandingPresetKey(preset)}>
+                      {preset.pluginName} · {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="branding-summary">
+                {selectedBrandingPreset ? (
+                  <>
+                    <strong>{selectedBrandingPreset.label}</strong>
+                    <span>{selectedBrandingPreset.description}</span>
+                    <div className="branding-state-row" aria-label="브랜딩 적용 상태">
+                      <span className={["branding-state-badge", brandingBodyState].join(" ")}>
+                        {brandingBodyStateLabel}
+                      </span>
+                      <span className="branding-state-note">
+                        {selectedBrandingEffectItems.length > 0
+                          ? selectedBrandingEffectItems.join(" · ")
+                          : "적용할 기본값 없음"}
+                      </span>
+                    </div>
+                    {selectedBrandingPreset.viewerTheme && (
+                      <div className="branding-swatch-row" aria-hidden="true">
+                        {Object.entries(compactViewerTheme(selectedBrandingPreset.viewerTheme) ?? {}).map(([key, value]) => (
+                          <span className="branding-swatch" key={key} style={{ backgroundColor: String(value) }} />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <span>활성 브랜딩 preset이 없습니다.</span>
+                )}
+              </div>
+              <button
+                type="button"
+                className={["branding-apply-button", brandingApplyPending ? "pending" : ""].filter(Boolean).join(" ")}
+                onClick={handleApplySelectedBrandingPreset}
+                disabled={!selectedBrandingPreset}
+              >
+                {selectedBrandingMetadataChanged ? "브랜딩 다시 적용" : "브랜딩 적용"}
+              </button>
+            </div>
+          )}
           <details className="admin-meta-details">
             <summary>관리용 정보</summary>
             <div className="admin-meta-grid">
@@ -1464,7 +1755,11 @@ export function App(): ReactElement {
           </details>
         </section>
 
-        <section className="panel editor-panel" aria-labelledby="editor-heading">
+        <section
+          className={["panel editor-panel", activeDocumentBrandingStyle ? "document-branded" : ""].filter(Boolean).join(" ")}
+          aria-labelledby="editor-heading"
+          style={activeDocumentBrandingStyle}
+        >
           <div className="section-heading">
             <h2 id="editor-heading">암호화 본문 작성</h2>
             <div className="mode-toggle editor-mode-toggle" aria-label="본문 작성 모드">
@@ -1831,7 +2126,6 @@ export function App(): ReactElement {
                       <div>
                         <div className="plugin-title-row">
                           <h3>{displayName}</h3>
-                          <span className="plugin-category">{pluginCategoryLabel(plugin.category)}</span>
                         </div>
                         <p className="plugin-description">{pluginDisplayDescription(plugin)}</p>
                         <div className="plugin-meta">
@@ -1864,23 +2158,41 @@ export function App(): ReactElement {
                         </ul>
                       </div>
                     )}
-                    <div className="plugin-chip-row" aria-label={`${displayName} 권한`}>
-                      {plugin.permissions.length === 0 ? (
-                        <span className="plugin-chip muted">권한 없음</span>
-                      ) : (
-                        plugin.permissions.map((permission) => (
-                          <span className="plugin-chip" key={permission}>
-                            {pluginPermissionLabel(permission)}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                    <div className="plugin-chip-row" aria-label={`${displayName} 확장 지점`}>
-                      {contributionLabels.map((label) => (
-                        <span className="plugin-chip contribution" key={label}>
-                          {label}
-                        </span>
-                      ))}
+                    <div className="plugin-badge-grid" aria-label={`${displayName} 플러그인 속성`}>
+                      <div className="plugin-badge-section">
+                        <strong className="plugin-badge-heading">분류</strong>
+                        <div className="plugin-chip-row">
+                          <span className="plugin-chip category">{pluginCategoryLabel(plugin.category)}</span>
+                        </div>
+                      </div>
+                      <div className="plugin-badge-section">
+                        <strong className="plugin-badge-heading">필요 권한</strong>
+                        <div className="plugin-chip-row">
+                          {plugin.permissions.length === 0 ? (
+                            <span className="plugin-chip muted">권한 없음</span>
+                          ) : (
+                            plugin.permissions.map((permission) => (
+                              <span className="plugin-chip" key={permission}>
+                                {pluginPermissionLabel(permission)}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                      <div className="plugin-badge-section">
+                        <strong className="plugin-badge-heading">제공 기능</strong>
+                        <div className="plugin-chip-row">
+                          {contributionLabels.length === 0 ? (
+                            <span className="plugin-chip muted">제공 기능 없음</span>
+                          ) : (
+                            contributionLabels.map((label) => (
+                              <span className="plugin-chip contribution" key={label}>
+                                {label}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </div>
                     {smtpPluginId && plugin.enabled && (
                       <div className="smtp-settings-panel">
@@ -2053,6 +2365,17 @@ export function App(): ReactElement {
                 ))}
               </ul>
             </div>
+            <div className="publish-branding-summary">
+              <strong>적용 브랜딩</strong>
+              {activeBrandingPreset ? (
+                <span>
+                  {activeBrandingPreset.pluginName} · {activeBrandingPreset.label}
+                  {` · 현재 워터마크 ${metadata.watermarkText || "없음"}`}
+                </span>
+              ) : (
+                <span>기본 viewer 스타일</span>
+              )}
+            </div>
             <div className="publish-dialog-grid">
               <label className="field-pin">
                 문서 열람 PIN
@@ -2107,6 +2430,37 @@ export function App(): ReactElement {
             )}
             {status && <div className="status">{status}</div>}
             {error && <div className="error">{error}</div>}
+          </section>
+        </div>
+      )}
+      {pendingTemplateOverwrite && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeTemplateOverwriteDialog();
+            }
+          }}
+        >
+          <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="template-overwrite-heading">
+            <div className="publish-dialog-header">
+              <h2 id="template-overwrite-heading">본문 덮어쓰기 확인</h2>
+              <button type="button" className="dialog-close" onClick={closeTemplateOverwriteDialog}>
+                닫기
+              </button>
+            </div>
+            <p className="security-note publish-note">
+              현재 본문을 {pendingTemplateOverwrite.name} 템플릿 내용으로 바꿉니다. 이 작업은 현재 편집 중인 본문을 덮어씁니다.
+            </p>
+            <div className="button-row publish-dialog-actions">
+              <button type="button" onClick={closeTemplateOverwriteDialog}>
+                취소
+              </button>
+              <button type="button" className="primary" onClick={confirmTemplateOverwrite}>
+                템플릿 적용
+              </button>
+            </div>
           </section>
         </div>
       )}

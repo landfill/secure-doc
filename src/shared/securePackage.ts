@@ -1,5 +1,6 @@
 import { assertValidPin, DEFAULT_PIN_KDF_ITERATIONS, PIN_MAX_LENGTH, PIN_MIN_LENGTH } from "./pinPolicy.ts";
 import { base64UrlToBytes, bytesEqual, bytesToBase64Url, utf8Decode, utf8Encode } from "./encoding.ts";
+import type { SecureDocViewerTheme } from "./branding.ts";
 
 export const PACKAGE_SCHEMA = "com.company.secure-html-doc";
 export const PACKAGE_VERSION = "1.0.0";
@@ -17,6 +18,12 @@ export interface SecureDocPlainContent {
     watermarkText?: string;
     recipientName?: string;
     documentNumber?: string;
+    branding?: {
+      pluginId: string;
+      presetId: string;
+      label: string;
+      viewerTheme?: SecureDocViewerTheme;
+    };
   };
 }
 

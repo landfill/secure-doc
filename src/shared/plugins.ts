@@ -8,6 +8,7 @@ import {
   PUBLISH_POLICY_METADATA_FIELDS,
   type PublishPolicyMetadataField
 } from "./publishPolicy.ts";
+import { getViewerThemeContractViolations, type SecureDocViewerTheme } from "./branding.ts";
 
 export const PLUGIN_CATEGORIES = ["delivery", "template", "audit", "branding", "policy"] as const;
 
@@ -47,12 +48,22 @@ export interface PluginPolicyProfileContribution {
   requireWatermark?: boolean;
 }
 
+export interface PluginBrandingPresetContribution {
+  id: string;
+  label: string;
+  description: string;
+  issuer?: string;
+  watermarkText?: string;
+  viewerTheme?: SecureDocViewerTheme;
+}
+
 export interface PluginContributes {
   settingsPanel?: boolean;
   publishActions?: PluginActionContribution[];
   templates?: PluginTemplateContribution[];
   historyActions?: PluginActionContribution[];
   policyProfiles?: PluginPolicyProfileContribution[];
+  brandingPresets?: PluginBrandingPresetContribution[];
 }
 
 type PluginContributionPoint = keyof PluginContributes;
@@ -62,7 +73,8 @@ export const PLUGIN_CONTRIBUTION_PERMISSION_REQUIREMENTS = {
   publishActions: ["ui:publish-action"],
   templates: [],
   historyActions: ["history:read"],
-  policyProfiles: []
+  policyProfiles: [],
+  brandingPresets: []
 } as const satisfies Record<PluginContributionPoint, readonly PluginPermission[]>;
 
 export const PLUGIN_ID_PREFIXES_BY_CATEGORY = {
@@ -102,11 +114,17 @@ export interface ResolvedPluginPolicyProfileContribution extends PluginPolicyPro
   pluginName: string;
 }
 
+export interface ResolvedPluginBrandingPresetContribution extends PluginBrandingPresetContribution {
+  pluginId: string;
+  pluginName: string;
+}
+
 export interface PluginContributions {
   publishActions: ResolvedPluginActionContribution[];
   templates: ResolvedPluginTemplateContribution[];
   historyActions: ResolvedPluginActionContribution[];
   policyProfiles: ResolvedPluginPolicyProfileContribution[];
+  brandingPresets: ResolvedPluginBrandingPresetContribution[];
 }
 
 export const GMAIL_SMTP_PLUGIN_ID = "delivery.smtp.gmail";
@@ -123,12 +141,16 @@ export const AUDIT_INTEGRITY_PLUGIN_ID = "audit.integrity.report";
 export const AUDIT_INTEGRITY_HISTORY_ACTION_ID = "verify-package";
 export const STRICT_PIN_POLICY_PLUGIN_ID = "policy.strict-pin";
 export const STRICT_PIN_POLICY_PROFILE_ID = "strict-pin";
+export const BUSINESS_TEMPLATE_PACK_PLUGIN_ID = "template-pack.business-samples";
+export const COMPANY_DEFAULT_BRANDING_PLUGIN_ID = "branding.company-defaults";
+export const COMPANY_DEFAULT_BRANDING_PRESET_ID = "company-defaults";
 
 export const EMPTY_PLUGIN_CONTRIBUTIONS: PluginContributions = {
   publishActions: [],
   templates: [],
   historyActions: [],
-  policyProfiles: []
+  policyProfiles: [],
+  brandingPresets: []
 };
 
 export function isSmtpDeliveryPluginId(pluginId: string): pluginId is SmtpDeliveryPluginId {
@@ -203,6 +225,28 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
     }
   },
   {
+    id: BUSINESS_TEMPLATE_PACK_PLUGIN_ID,
+    name: "업무 문서 템플릿",
+    version: "0.1.0",
+    description: "보험증서와 고지서 같은 업무용 보안 문서 템플릿을 추가합니다.",
+    category: "template",
+    permissions: [],
+    contributes: {
+      templates: [
+        {
+          id: "core.insurance-certificate",
+          label: "보험증서",
+          description: "보험증서 형식의 보안 문서 템플릿입니다."
+        },
+        {
+          id: "core.billing-notice",
+          label: "고지서",
+          description: "수신자와 발행자가 자동 반영되는 고지서 템플릿입니다."
+        }
+      ]
+    }
+  },
+  {
     id: AUDIT_INTEGRITY_PLUGIN_ID,
     name: "패키지 무결성 감사",
     version: "0.1.0",
@@ -216,6 +260,36 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
           id: AUDIT_INTEGRITY_HISTORY_ACTION_ID,
           label: "무결성 검증",
           description: "발행 이력의 SHA-256 해시와 현재 저장된 HTML 파일을 비교해 변조 여부를 확인합니다."
+        }
+      ]
+    }
+  },
+  {
+    id: COMPANY_DEFAULT_BRANDING_PLUGIN_ID,
+    name: "조직 기본 브랜딩",
+    version: "0.1.0",
+    description:
+      "문서 발행 시 조직명, 기본 워터마크, 오프라인 viewer 색상 preset을 적용합니다. 원격 이미지나 외부 리소스는 포함하지 않습니다.",
+    category: "branding",
+    permissions: [],
+    contributes: {
+      brandingPresets: [
+        {
+          id: COMPANY_DEFAULT_BRANDING_PRESET_ID,
+          label: "조직 기본",
+          description: "발행자, 워터마크, viewer 강조색을 조직 기본값으로 맞춥니다.",
+          issuer: "Secure Doc Team",
+          watermarkText: "CONFIDENTIAL",
+          viewerTheme: {
+            accentColor: "#2f6fed",
+            accentSoftColor: "#eaf1ff",
+            backgroundColor: "#f7f9fc",
+            surfaceColor: "#ffffff",
+            textColor: "#182033",
+            mutedTextColor: "#637083",
+            borderColor: "#d9e1ec",
+            documentBorderColor: "#2f6fed"
+          }
         }
       ]
     }
@@ -287,7 +361,7 @@ export function getPluginManifestContractViolations(manifest: PluginManifest): s
     }
   }
 
-  for (const point of ["publishActions", "historyActions", "templates", "policyProfiles"] as const) {
+  for (const point of ["publishActions", "historyActions", "templates", "policyProfiles", "brandingPresets"] as const) {
     const contributions = manifest.contributes[point] ?? [];
     for (const duplicateId of findDuplicateIds(contributions)) {
       violations.push(`${manifest.id}: duplicate ${point} id ${duplicateId}`);
@@ -328,6 +402,15 @@ export function getPluginManifestContractViolations(manifest: PluginManifest): s
     }
   }
 
+  for (const brandingPreset of manifest.contributes.brandingPresets ?? []) {
+    violations.push(
+      ...getViewerThemeContractViolations(
+        `${manifest.id}: branding preset ${brandingPreset.id}`,
+        brandingPreset.viewerTheme
+      )
+    );
+  }
+
   return violations;
 }
 
@@ -351,7 +434,8 @@ export function getEnabledPluginContributions(
     publishActions: [],
     templates: [],
     historyActions: [],
-    policyProfiles: []
+    policyProfiles: [],
+    brandingPresets: []
   };
 
   for (const manifest of manifests) {
@@ -386,6 +470,14 @@ export function getEnabledPluginContributions(
     for (const policyProfile of manifest.contributes.policyProfiles ?? []) {
       contributions.policyProfiles.push({
         ...policyProfile,
+        pluginId: manifest.id,
+        pluginName: manifest.name
+      });
+    }
+
+    for (const brandingPreset of manifest.contributes.brandingPresets ?? []) {
+      contributions.brandingPresets.push({
+        ...brandingPreset,
         pluginId: manifest.id,
         pluginName: manifest.name
       });

@@ -1,3 +1,5 @@
+import type { ResolvedPluginTemplateContribution } from "./plugins.ts";
+
 export const DOCUMENT_TEMPLATE_CATEGORIES = ["notice", "contract", "policy", "general"] as const;
 
 export type DocumentTemplateCategory = (typeof DOCUMENT_TEMPLATE_CATEGORIES)[number];
@@ -17,6 +19,7 @@ export interface DocumentTemplateMetadata {
 export interface DocumentTemplate {
   id: string;
   pluginId?: string;
+  pluginName?: string;
   name: string;
   description: string;
   category: DocumentTemplateCategory;
@@ -255,11 +258,58 @@ export const CORE_DOCUMENT_TEMPLATES: readonly DocumentTemplate[] = [
   }
 ];
 
+export const BASE_DOCUMENT_TEMPLATE_IDS = ["core.notice", "core.contract", "core.policy", "core.general"] as const;
+
+export const BASE_DOCUMENT_TEMPLATES: readonly DocumentTemplate[] = CORE_DOCUMENT_TEMPLATES.filter((template) =>
+  (BASE_DOCUMENT_TEMPLATE_IDS as readonly string[]).includes(template.id)
+);
+
+export const TRUSTED_DOCUMENT_TEMPLATES: readonly DocumentTemplate[] = CORE_DOCUMENT_TEMPLATES;
+
 export function getDocumentTemplateById(
   templateId: string,
   templates: readonly DocumentTemplate[] = CORE_DOCUMENT_TEMPLATES
 ): DocumentTemplate | undefined {
   return templates.find((template) => template.id === templateId);
+}
+
+export function resolveAvailableDocumentTemplates(
+  pluginTemplates: readonly ResolvedPluginTemplateContribution[],
+  baseTemplates: readonly DocumentTemplate[] = BASE_DOCUMENT_TEMPLATES,
+  trustedTemplates: readonly DocumentTemplate[] = TRUSTED_DOCUMENT_TEMPLATES
+): DocumentTemplate[] {
+  const trustedTemplatesById = new Map(trustedTemplates.map((template) => [template.id, template]));
+  const availableTemplates: DocumentTemplate[] = [];
+  const availableIds = new Set<string>();
+
+  function addTemplate(template: DocumentTemplate): void {
+    if (availableIds.has(template.id)) {
+      return;
+    }
+    availableTemplates.push(template);
+    availableIds.add(template.id);
+  }
+
+  for (const template of baseTemplates) {
+    addTemplate(template);
+  }
+
+  for (const pluginTemplate of pluginTemplates) {
+    const trustedTemplate = trustedTemplatesById.get(pluginTemplate.id);
+    if (!trustedTemplate) {
+      continue;
+    }
+
+    addTemplate({
+      ...trustedTemplate,
+      pluginId: pluginTemplate.pluginId,
+      pluginName: pluginTemplate.pluginName,
+      name: pluginTemplate.label || trustedTemplate.name,
+      description: pluginTemplate.description || trustedTemplate.description
+    });
+  }
+
+  return availableTemplates;
 }
 
 export function applyDocumentTemplateDefaults(

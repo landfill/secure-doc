@@ -11,7 +11,7 @@ Core templates live in `src/shared/documentTemplates.ts` and are available witho
 - `core.policy`: 정책/규정 문서
 - `core.general`: 일반 보안 문서
 
-The registry also keeps existing sample structures such as insurance certificate and billing notice so older document-type flows can use the same template application path.
+The trusted registry also keeps plugin-pack structures such as insurance certificate and billing notice. They are not part of the default picker until an enabled template-pack plugin contributes their ids.
 
 ## Data Contract
 
@@ -36,8 +36,10 @@ The document screen lets the user choose and apply a template. Applying a templa
 
 After a template is applied, metadata fields that are part of the body placeholder set keep the body synchronized until the user manually edits the body.
 
-## Future Template Packs
+Changing the document type is metadata-only. It can move the template selector to a matching template for discoverability, but it must not apply template defaults or replace the body. The renderer marks whether the selected template is already applied to the body so the next action stays visible. Body replacement remains an explicit template-apply action.
 
-Template-pack plugins should contribute template ids through `contributes.templates`. The content itself should remain static data or a safe builder shipped with the trusted app bundle; renderer code should not execute arbitrary third-party plugin code.
+## Template Packs
+
+Template-pack plugins should contribute template ids through `contributes.templates`. The renderer resolves those ids against the trusted bundled template registry before showing them. Unknown ids are ignored, and the content itself should remain static data or a safe builder shipped with the trusted app bundle; renderer code should not execute arbitrary third-party plugin code.
 
 Template packs should require no network, secret storage, or package read permission unless a future design explicitly adds a reviewed capability.

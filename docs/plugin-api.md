@@ -66,6 +66,7 @@ Required contribution permissions:
 - `historyActions` requires `history:read`.
 - `templates` requires no special permission by default because templates must be static data with no network or secret access.
 - `policyProfiles` requires no special permission by default because policy profiles are declarative publish-time validation presets.
+- `brandingPresets` requires no special permission by default because brand presets are static metadata and safe viewer color values.
 
 Feature-specific permissions still apply. For example, an SMTP delivery plugin also needs `network:smtp`, `secret:safeStorage`, `package:read`, and usually `history:read`.
 
@@ -87,6 +88,7 @@ type PluginContributes = {
   templates?: PluginTemplateContribution[];
   historyActions?: PluginActionContribution[];
   policyProfiles?: PluginPolicyProfileContribution[];
+  brandingPresets?: PluginBrandingPresetContribution[];
 };
 ```
 
@@ -118,13 +120,25 @@ Declares actions available from publish history. The main process must resolve t
 
 ### `templates`
 
-Declares static templates or template ids. Core templates are implemented in `src/shared/documentTemplates.ts`, and future template packs should use the same static-data or safe-builder shape. Template content must be sanitized before injection into the editor and must not contain real sensitive examples, PINs, PIN hashes, keys, executable markup, or remote resources.
+Declares static template ids. Base templates are shown without a plugin, while enabled template-pack plugins add ids that resolve against the trusted bundled registry in `src/shared/documentTemplates.ts`. Template content must be sanitized before injection into the editor and must not contain real sensitive examples, PINs, PIN hashes, keys, executable markup, or remote resources.
 
 ### `policyProfiles`
 
 Declares publish-time validation presets. Policy profiles can require a longer PIN, a minimum PBKDF2 iteration count, required metadata fields, or a watermark. A profile must not weaken the base security floor: `minimumPinLength` cannot be below the core PIN minimum, `minimumKdfIterations` cannot be below the compatibility KDF floor, and required metadata fields must come from the reviewed allowlist.
 
 The renderer applies enabled policy profiles before issuing a package. Policy failures must be specific enough for the operator to fix the form, but must not include PINs, PIN hashes, plaintext bodies, DEKs, or KEKs.
+
+### `brandingPresets`
+
+Declares static brand presets for publish metadata and viewer presentation. A branding preset may provide:
+
+- `issuer`: default issuer/organization text.
+- `watermarkText`: default private watermark text.
+- `viewerTheme`: optional document/editor preview and offline viewer color values.
+
+Viewer theme values must be literal `#rrggbb` colors. Presets must not reference remote images, external fonts, scripts, network URLs, PINs, PIN hashes, plaintext document bodies, DEKs, or KEKs.
+
+The renderer applies a selected preset before publishing. The branding picker shows whether the selected preset is applied, pending, or has been manually edited, and lists the metadata/document/viewer values the preset controls. The editor and preview use the active preset's safe color tokens for document heading, border, link, code, and section treatments. The applied preset is shown in the publish dialog, and the viewer theme is stored inside encrypted private metadata so the generated HTML does not expose the selected brand colors before unlock. The generated viewer still keeps `connect-src 'none'` and does not load remote resources.
 
 ## IPC Contract
 

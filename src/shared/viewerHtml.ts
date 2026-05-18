@@ -59,6 +59,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       --border-table: #d7deea;
       --accent: #c96442;
       --accent-soft: #fbefe9;
+      --document-border: var(--accent);
       --surface: #ffffff;
       --on-accent: #ffffff;
       --bad: #b53a2a;
@@ -157,7 +158,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       padding: 32px 0;
       line-height: 1.7;
       background: var(--surface);
-      border-top: 4px solid var(--accent);
+      border-top: 4px solid var(--document-border);
       overflow: hidden;
       isolation: isolate;
     }
@@ -166,6 +167,18 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       z-index: 1;
       width: min(820px, calc(100% - 40px));
       margin: 0 auto;
+    }
+    .document-inner h1 {
+      color: var(--accent);
+    }
+    .document-inner h2 {
+      border-left: 4px solid var(--accent);
+      padding: 5px 0 5px 10px;
+      color: var(--fg);
+      background: var(--accent-soft);
+    }
+    .document-inner h3 {
+      color: var(--fg);
     }
     .document-inner table {
       width: 100%;
@@ -311,9 +324,35 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
   const PIN_MIN_LENGTH = ${PIN_MIN_LENGTH};
   const PIN_MAX_LENGTH = ${PIN_MAX_LENGTH};
   const CONTROL_CHARACTERS = /[\\u0000-\\u001F\\u007F]/;
+  const THEME_VARIABLES = {
+    accentColor: "--accent",
+    accentSoftColor: "--accent-soft",
+    backgroundColor: "--bg",
+    surfaceColor: "--surface",
+    textColor: "--fg",
+    mutedTextColor: "--muted",
+    borderColor: "--border",
+    documentBorderColor: "--document-border"
+  };
 
   function normalizePin(value) {
     return String(value || "").normalize("NFKC").trim();
+  }
+
+  function isSafeThemeColor(value) {
+    return /^#[0-9a-fA-F]{6}$/.test(String(value || ""));
+  }
+
+  function applyViewerTheme(theme) {
+    if (!theme || typeof theme !== "object") {
+      return;
+    }
+    for (const [key, variableName] of Object.entries(THEME_VARIABLES)) {
+      const value = theme[key];
+      if (isSafeThemeColor(value)) {
+        document.documentElement.style.setProperty(variableName, String(value).toLowerCase());
+      }
+    }
   }
 
   function base64UrlToBytes(value) {
@@ -489,6 +528,8 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       const content = await unlock(pinInput.value);
       documentInner.innerHTML = sanitizeHtml(content.html);
       const watermarkText = String(content.privateMeta && content.privateMeta.watermarkText || "").trim();
+      const branding = content.privateMeta && content.privateMeta.branding;
+      applyViewerTheme(branding && branding.viewerTheme);
       watermark.textContent = watermarkText;
       watermark.classList.toggle("visible", Boolean(watermarkText));
       pinInput.value = "";

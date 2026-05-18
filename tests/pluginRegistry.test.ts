@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   BUILT_IN_PLUGIN_MANIFESTS,
+  BUSINESS_TEMPLATE_PACK_PLUGIN_ID,
   PLUGIN_CATEGORIES,
   PLUGIN_CONTRIBUTION_PERMISSION_REQUIREMENTS,
   PLUGIN_ID_PREFIXES_BY_CATEGORY,
   PLUGIN_PERMISSIONS,
+  COMPANY_DEFAULT_BRANDING_PLUGIN_ID,
   GENERIC_SMTP_PLUGIN_ID,
   STRICT_PIN_POLICY_PLUGIN_ID,
   buildPluginDescriptors,
@@ -13,6 +15,7 @@ import {
   getPluginManifestContractViolations,
   type PluginManifest
 } from "../src/shared/plugins.ts";
+import type { SecureDocViewerTheme } from "../src/shared/branding.ts";
 
 test("plugin category, permission, and contribution contracts are explicit", () => {
   assert.deepEqual(PLUGIN_CATEGORIES, ["delivery", "template", "audit", "branding", "policy"]);
@@ -30,7 +33,8 @@ test("plugin category, permission, and contribution contracts are explicit", () 
     publishActions: ["ui:publish-action"],
     templates: [],
     historyActions: ["history:read"],
-    policyProfiles: []
+    policyProfiles: [],
+    brandingPresets: []
   });
   assert.deepEqual(PLUGIN_ID_PREFIXES_BY_CATEGORY, {
     delivery: ["delivery."],
@@ -90,6 +94,23 @@ test("built-in plugin manifests expose stable ids, permissions, and extension po
   assert.equal(policyPlugin.contributes.policyProfiles?.[0]?.id, "strict-pin");
   assert.equal(policyPlugin.contributes.policyProfiles?.[0]?.minimumPinLength, 10);
   assert.equal(policyPlugin.contributes.policyProfiles?.[0]?.minimumKdfIterations, 1_000_000);
+
+  const brandingPlugin = BUILT_IN_PLUGIN_MANIFESTS.find((plugin) => plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID);
+  assert.ok(brandingPlugin);
+  assert.equal(brandingPlugin.category, "branding");
+  assert.deepEqual(brandingPlugin.permissions, []);
+  assert.equal(brandingPlugin.contributes.brandingPresets?.[0]?.id, "company-defaults");
+  assert.equal(brandingPlugin.contributes.brandingPresets?.[0]?.issuer, "Secure Doc Team");
+  assert.equal(brandingPlugin.contributes.brandingPresets?.[0]?.viewerTheme?.accentColor, "#2f6fed");
+
+  const templatePlugin = BUILT_IN_PLUGIN_MANIFESTS.find((plugin) => plugin.id === BUSINESS_TEMPLATE_PACK_PLUGIN_ID);
+  assert.ok(templatePlugin);
+  assert.equal(templatePlugin.category, "template");
+  assert.deepEqual(templatePlugin.permissions, []);
+  assert.deepEqual(
+    templatePlugin.contributes.templates?.map((template) => template.id),
+    ["core.insurance-certificate", "core.billing-notice"]
+  );
 });
 
 test("plugin manifest contract catches permission and naming drift", () => {
@@ -182,6 +203,69 @@ test("policy manifests can contribute stricter publish profiles without permissi
   assert.deepEqual(getPluginManifestContractViolations(policyManifest), []);
 });
 
+test("branding manifests can contribute safe offline viewer presets without permissions", () => {
+  const brandingManifest: PluginManifest = {
+    id: "branding.client-pack",
+    name: "Client Brand Pack",
+    version: "0.1.0",
+    description: "Static client branding presets.",
+    category: "branding",
+    permissions: [],
+    contributes: {
+      brandingPresets: [
+        {
+          id: "client-default",
+          label: "Client default",
+          description: "Applies client issuer, watermark, and viewer colors.",
+          issuer: "Client Corp",
+          watermarkText: "CLIENT",
+          viewerTheme: {
+            accentColor: "#123456",
+            accentSoftColor: "#eef4ff",
+            backgroundColor: "#ffffff",
+            surfaceColor: "#ffffff",
+            textColor: "#111827",
+            mutedTextColor: "#4b5563",
+            borderColor: "#d1d5db",
+            documentBorderColor: "#123456"
+          }
+        }
+      ]
+    }
+  };
+
+  assert.deepEqual(getPluginManifestContractViolations(brandingManifest), []);
+});
+
+test("branding manifest contract blocks unsafe viewer theme colors", () => {
+  const unsafeBrandingManifest: PluginManifest = {
+    id: "branding.unsafe",
+    name: "Unsafe Brand Pack",
+    version: "0.1.0",
+    description: "Invalid branding preset for regression coverage.",
+    category: "branding",
+    permissions: [],
+    contributes: {
+      brandingPresets: [
+        {
+          id: "unsafe",
+          label: "Unsafe",
+          description: "Invalid colors.",
+          viewerTheme: {
+            accentColor: "url(https://example.com/a.png)",
+            unsupportedColor: "#ffffff"
+          } as SecureDocViewerTheme
+        }
+      ]
+    }
+  };
+
+  assert.deepEqual(getPluginManifestContractViolations(unsafeBrandingManifest), [
+    "branding.unsafe: branding preset unsafe: viewer theme accentColor must be a #rrggbb color",
+    "branding.unsafe: branding preset unsafe: viewer theme unsupportedColor is not supported"
+  ]);
+});
+
 test("policy manifest contract blocks weaker or unsupported profile requirements", () => {
   const weakPolicyManifest: PluginManifest = {
     id: "policy.weak",
@@ -226,6 +310,7 @@ test("plugin descriptors and contributions are driven only by enabled state", ()
   assert.equal(contributions.historyActions.length, 1);
   assert.equal(contributions.historyActions[0].pluginId, "delivery.smtp.gmail");
   assert.equal(contributions.policyProfiles.length, 0);
+  assert.equal(contributions.brandingPresets.length, 0);
 
   const genericContributions = getEnabledPluginContributions([GENERIC_SMTP_PLUGIN_ID]);
   assert.equal(genericContributions.publishActions.length, 1);
@@ -244,4 +329,16 @@ test("plugin descriptors and contributions are driven only by enabled state", ()
   assert.equal(policyContributions.policyProfiles.length, 1);
   assert.equal(policyContributions.policyProfiles[0].pluginId, STRICT_PIN_POLICY_PLUGIN_ID);
   assert.equal(policyContributions.policyProfiles[0].minimumPinLength, 10);
+
+  const brandingContributions = getEnabledPluginContributions([COMPANY_DEFAULT_BRANDING_PLUGIN_ID]);
+  assert.equal(brandingContributions.publishActions.length, 0);
+  assert.equal(brandingContributions.brandingPresets.length, 1);
+  assert.equal(brandingContributions.brandingPresets[0].pluginId, COMPANY_DEFAULT_BRANDING_PLUGIN_ID);
+  assert.equal(brandingContributions.brandingPresets[0].viewerTheme?.documentBorderColor, "#2f6fed");
+
+  const templateContributions = getEnabledPluginContributions([BUSINESS_TEMPLATE_PACK_PLUGIN_ID]);
+  assert.equal(templateContributions.publishActions.length, 0);
+  assert.equal(templateContributions.templates.length, 2);
+  assert.equal(templateContributions.templates[0].pluginId, BUSINESS_TEMPLATE_PACK_PLUGIN_ID);
+  assert.equal(templateContributions.brandingPresets.length, 0);
 });
