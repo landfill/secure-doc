@@ -258,6 +258,14 @@ export const CORE_DOCUMENT_TEMPLATES: readonly DocumentTemplate[] = [
   }
 ];
 
+export const BASE_DOCUMENT_TEMPLATE_IDS = ["core.notice", "core.contract", "core.policy", "core.general"] as const;
+
+export const BASE_DOCUMENT_TEMPLATES: readonly DocumentTemplate[] = CORE_DOCUMENT_TEMPLATES.filter((template) =>
+  (BASE_DOCUMENT_TEMPLATE_IDS as readonly string[]).includes(template.id)
+);
+
+export const TRUSTED_DOCUMENT_TEMPLATES: readonly DocumentTemplate[] = CORE_DOCUMENT_TEMPLATES;
+
 export function getDocumentTemplateById(
   templateId: string,
   templates: readonly DocumentTemplate[] = CORE_DOCUMENT_TEMPLATES
@@ -267,8 +275,8 @@ export function getDocumentTemplateById(
 
 export function resolveAvailableDocumentTemplates(
   pluginTemplates: readonly ResolvedPluginTemplateContribution[],
-  baseTemplates: readonly DocumentTemplate[] = CORE_DOCUMENT_TEMPLATES,
-  trustedTemplates: readonly DocumentTemplate[] = CORE_DOCUMENT_TEMPLATES
+  baseTemplates: readonly DocumentTemplate[] = BASE_DOCUMENT_TEMPLATES,
+  trustedTemplates: readonly DocumentTemplate[] = TRUSTED_DOCUMENT_TEMPLATES
 ): DocumentTemplate[] {
   const trustedTemplatesById = new Map(trustedTemplates.map((template) => [template.id, template]));
   const availableTemplates: DocumentTemplate[] = [];

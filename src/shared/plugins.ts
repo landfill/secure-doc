@@ -141,6 +141,7 @@ export const AUDIT_INTEGRITY_PLUGIN_ID = "audit.integrity.report";
 export const AUDIT_INTEGRITY_HISTORY_ACTION_ID = "verify-package";
 export const STRICT_PIN_POLICY_PLUGIN_ID = "policy.strict-pin";
 export const STRICT_PIN_POLICY_PROFILE_ID = "strict-pin";
+export const BUSINESS_TEMPLATE_PACK_PLUGIN_ID = "template-pack.business-samples";
 export const COMPANY_DEFAULT_BRANDING_PLUGIN_ID = "branding.company-defaults";
 export const COMPANY_DEFAULT_BRANDING_PRESET_ID = "company-defaults";
 
@@ -219,6 +220,28 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
           id: GENERIC_SMTP_HISTORY_SEND_ACTION_ID,
           label: "SMTP 발송",
           description: "발행 이력에 저장된 보안 HTML 패키지를 설정된 SMTP 서버로 다시 전송합니다."
+        }
+      ]
+    }
+  },
+  {
+    id: BUSINESS_TEMPLATE_PACK_PLUGIN_ID,
+    name: "업무 문서 템플릿",
+    version: "0.1.0",
+    description: "보험증서와 고지서 같은 업무용 보안 문서 템플릿을 추가합니다.",
+    category: "template",
+    permissions: [],
+    contributes: {
+      templates: [
+        {
+          id: "core.insurance-certificate",
+          label: "보험증서",
+          description: "보험증서 형식의 보안 문서 템플릿입니다."
+        },
+        {
+          id: "core.billing-notice",
+          label: "고지서",
+          description: "수신자와 발행자가 자동 반영되는 고지서 템플릿입니다."
         }
       ]
     }

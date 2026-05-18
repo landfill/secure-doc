@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   BUILT_IN_PLUGIN_MANIFESTS,
+  BUSINESS_TEMPLATE_PACK_PLUGIN_ID,
   PLUGIN_CATEGORIES,
   PLUGIN_CONTRIBUTION_PERMISSION_REQUIREMENTS,
   PLUGIN_ID_PREFIXES_BY_CATEGORY,
@@ -101,6 +102,15 @@ test("built-in plugin manifests expose stable ids, permissions, and extension po
   assert.equal(brandingPlugin.contributes.brandingPresets?.[0]?.id, "company-defaults");
   assert.equal(brandingPlugin.contributes.brandingPresets?.[0]?.issuer, "Secure Doc Team");
   assert.equal(brandingPlugin.contributes.brandingPresets?.[0]?.viewerTheme?.accentColor, "#2f6fed");
+
+  const templatePlugin = BUILT_IN_PLUGIN_MANIFESTS.find((plugin) => plugin.id === BUSINESS_TEMPLATE_PACK_PLUGIN_ID);
+  assert.ok(templatePlugin);
+  assert.equal(templatePlugin.category, "template");
+  assert.deepEqual(templatePlugin.permissions, []);
+  assert.deepEqual(
+    templatePlugin.contributes.templates?.map((template) => template.id),
+    ["core.insurance-certificate", "core.billing-notice"]
+  );
 });
 
 test("plugin manifest contract catches permission and naming drift", () => {
@@ -325,4 +335,10 @@ test("plugin descriptors and contributions are driven only by enabled state", ()
   assert.equal(brandingContributions.brandingPresets.length, 1);
   assert.equal(brandingContributions.brandingPresets[0].pluginId, COMPANY_DEFAULT_BRANDING_PLUGIN_ID);
   assert.equal(brandingContributions.brandingPresets[0].viewerTheme?.documentBorderColor, "#2f6fed");
+
+  const templateContributions = getEnabledPluginContributions([BUSINESS_TEMPLATE_PACK_PLUGIN_ID]);
+  assert.equal(templateContributions.publishActions.length, 0);
+  assert.equal(templateContributions.templates.length, 2);
+  assert.equal(templateContributions.templates[0].pluginId, BUSINESS_TEMPLATE_PACK_PLUGIN_ID);
+  assert.equal(templateContributions.brandingPresets.length, 0);
 });

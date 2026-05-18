@@ -776,6 +776,7 @@ export function App(): ReactElement {
   const auditHistoryActionEnabled = hasActiveAuditIntegrityHistoryAction(pluginContributions);
   const activeContributionBadges = [
     ...pluginContributions.publishActions.map((action) => `발행: ${action.label}`),
+    ...pluginContributions.templates.map((template) => `템플릿: ${template.label}`),
     ...pluginContributions.policyProfiles.map((profile) => `정책: ${profile.label}`),
     ...pluginContributions.brandingPresets.map((preset) => `브랜딩: ${preset.label}`)
   ];
@@ -865,10 +866,6 @@ export function App(): ReactElement {
       if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID && !enabled) {
         setAuditReport(null);
         setAuditBusyDocumentId(null);
-      }
-      if (plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID && !enabled) {
-        setActiveBrandingPresetKey("");
-        setSelectedBrandingPresetKey("");
       }
       setStatus(`${pluginDisplayName(plugin)} 플러그인을 ${enabled ? "활성화" : "비활성화"}했습니다.`);
     } catch (caught) {
@@ -1043,7 +1040,7 @@ export function App(): ReactElement {
     setMetadata(nextMetadata);
     setSelectedBrandingPresetKey(brandingPresetKey(preset));
     setActiveBrandingPresetKey(brandingPresetKey(preset));
-    if (syncPresetWithMetadata && preset.issuer) {
+    if (syncPresetWithMetadata && preset.issuer !== undefined) {
       replaceEditorHtml(buildTemplateHtml(activeTemplate, nextMetadata));
     }
     const effectItems = brandingPresetEffectItems(preset);
@@ -2373,7 +2370,7 @@ export function App(): ReactElement {
               {activeBrandingPreset ? (
                 <span>
                   {activeBrandingPreset.pluginName} · {activeBrandingPreset.label}
-                  {activeBrandingPreset.watermarkText ? ` · 워터마크 ${activeBrandingPreset.watermarkText}` : ""}
+                  {` · 현재 워터마크 ${metadata.watermarkText || "없음"}`}
                 </span>
               ) : (
                 <span>기본 viewer 스타일</span>

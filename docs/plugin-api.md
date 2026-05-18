@@ -120,7 +120,7 @@ Declares actions available from publish history. The main process must resolve t
 
 ### `templates`
 
-Declares static templates or template ids. Core templates are implemented in `src/shared/documentTemplates.ts`, and future template packs should use the same static-data or safe-builder shape. Template content must be sanitized before injection into the editor and must not contain real sensitive examples, PINs, PIN hashes, keys, executable markup, or remote resources.
+Declares static template ids. Base templates are shown without a plugin, while enabled template-pack plugins add ids that resolve against the trusted bundled registry in `src/shared/documentTemplates.ts`. Template content must be sanitized before injection into the editor and must not contain real sensitive examples, PINs, PIN hashes, keys, executable markup, or remote resources.
 
 ### `policyProfiles`
 
