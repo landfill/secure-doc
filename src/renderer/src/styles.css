@@ -1184,11 +1184,12 @@ select:focus,
 .plugin-chip {
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 4px 8px;
+  padding: 3px 7px;
   color: var(--muted);
   background: var(--surface);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  line-height: 1.35;
 }
 
 .plugin-description {
@@ -1274,11 +1275,11 @@ select:focus,
 
 .plugin-feature-list {
   display: grid;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 6px;
+  margin-top: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 11px 12px;
+  padding: 9px 10px;
   background: var(--surface);
 }
 
@@ -1288,41 +1289,59 @@ select:focus,
 
 .plugin-feature-list ul {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding-left: 18px;
   color: var(--muted);
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
 .plugin-badge-grid {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.4fr) minmax(0, 1.2fr);
-  gap: 10px;
-  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px 14px;
+  margin-top: 10px;
   border-top: 1px solid var(--border);
-  padding-top: 12px;
+  padding-top: 9px;
 }
 
 .plugin-badge-section {
-  display: grid;
-  align-content: start;
-  gap: 7px;
+  display: flex;
+  align-items: start;
+  gap: 6px;
   min-width: 0;
 }
 
+.plugin-badge-section:first-child {
+  flex: 0 0 auto;
+}
+
+.plugin-badge-section:nth-child(2) {
+  flex: 2 1 360px;
+}
+
+.plugin-badge-section:nth-child(3) {
+  flex: 1 1 220px;
+}
+
 .plugin-badge-heading {
-  color: var(--fg);
+  flex: 0 0 auto;
+  padding-top: 3px;
+  color: var(--muted);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .plugin-chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  flex: 1 1 auto;
+  gap: 5px;
+  min-width: 0;
 }
 
 .plugin-chip.category {
@@ -1708,7 +1727,7 @@ select:focus,
   }
 
   .plugin-badge-grid {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 
   .template-picker,
