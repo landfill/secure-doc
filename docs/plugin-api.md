@@ -138,7 +138,7 @@ Declares static brand presets for publish metadata and viewer presentation. A br
 
 Viewer theme values must be literal `#rrggbb` colors. Presets must not reference remote images, external fonts, scripts, network URLs, PINs, PIN hashes, plaintext document bodies, DEKs, or KEKs.
 
-The renderer applies a selected preset before publishing. The applied preset is shown in the publish dialog, and the viewer theme is stored inside encrypted private metadata so the generated HTML does not expose the selected brand colors before unlock. The generated viewer still keeps `connect-src 'none'` and does not load remote resources.
+The renderer applies a selected preset before publishing. The branding picker shows whether the selected preset is applied, pending, or has been manually edited, and lists the metadata/viewer values the preset controls. The applied preset is shown in the publish dialog, and the viewer theme is stored inside encrypted private metadata so the generated HTML does not expose the selected brand colors before unlock. The generated viewer still keeps `connect-src 'none'` and does not load remote resources.
 
 ## IPC Contract
 

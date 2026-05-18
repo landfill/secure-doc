@@ -570,6 +570,29 @@ function brandingSnapshot(preset: ResolvedPluginBrandingPresetContribution | nul
   };
 }
 
+function brandingPresetMetadataMatches(
+  preset: ResolvedPluginBrandingPresetContribution,
+  metadata: Pick<MetadataState, "issuer" | "watermarkText">
+): boolean {
+  const issuerMatches = preset.issuer === undefined || metadata.issuer === preset.issuer;
+  const watermarkMatches = preset.watermarkText === undefined || metadata.watermarkText === preset.watermarkText;
+  return issuerMatches && watermarkMatches;
+}
+
+function brandingPresetEffectItems(preset: ResolvedPluginBrandingPresetContribution): string[] {
+  const items: string[] = [];
+  if (preset.issuer) {
+    items.push(`발행자: ${preset.issuer}`);
+  }
+  if (preset.watermarkText) {
+    items.push(`워터마크: ${preset.watermarkText}`);
+  }
+  if (compactViewerTheme(preset.viewerTheme)) {
+    items.push("viewer 색상");
+  }
+  return items;
+}
+
 function compactPrivateMeta(
   metadata: MetadataState,
   brandingPreset: ResolvedPluginBrandingPresetContribution | null
@@ -678,6 +701,28 @@ export function App(): ReactElement {
     activeBrandingPresets.find((preset) => brandingPresetKey(preset) === selectedBrandingPresetKey) ?? null;
   const activeBrandingPreset =
     activeBrandingPresets.find((preset) => brandingPresetKey(preset) === activeBrandingPresetKey) ?? null;
+  const selectedBrandingPresetResolvedKey = selectedBrandingPreset ? brandingPresetKey(selectedBrandingPreset) : "";
+  const selectedBrandingPresetIsActive = Boolean(
+    selectedBrandingPreset && selectedBrandingPresetResolvedKey === activeBrandingPresetKey
+  );
+  const selectedBrandingMetadataChanged = Boolean(
+    selectedBrandingPreset &&
+      selectedBrandingPresetIsActive &&
+      !brandingPresetMetadataMatches(selectedBrandingPreset, metadata)
+  );
+  const brandingApplyPending = Boolean(
+    selectedBrandingPreset && (!selectedBrandingPresetIsActive || selectedBrandingMetadataChanged)
+  );
+  const brandingBodyState = !selectedBrandingPreset
+    ? "empty"
+    : !selectedBrandingPresetIsActive
+      ? "pending"
+      : selectedBrandingMetadataChanged
+        ? "custom"
+        : "applied";
+  const brandingBodyStateLabel =
+    brandingBodyState === "pending" ? "브랜딩 미적용" : brandingBodyState === "custom" ? "값 수정됨" : brandingBodyState === "applied" ? "브랜딩 적용됨" : "선택 없음";
+  const selectedBrandingEffectItems = selectedBrandingPreset ? brandingPresetEffectItems(selectedBrandingPreset) : [];
   const pinResult = useMemo(
     () => evaluatePinPolicy(pin, { minLength: effectivePublishPolicy.minimumPinLength }),
     [effectivePublishPolicy.minimumPinLength, pin]
@@ -978,7 +1023,12 @@ export function App(): ReactElement {
     if (syncPresetWithMetadata && preset.issuer) {
       replaceEditorHtml(buildTemplateHtml(activeTemplate, nextMetadata));
     }
-    setStatus(`${preset.label} 브랜딩 preset을 적용했습니다.`);
+    const effectItems = brandingPresetEffectItems(preset);
+    setStatus(
+      effectItems.length > 0
+        ? `${preset.label} 브랜딩을 적용했습니다. ${effectItems.join(", ")} 항목이 반영됩니다.`
+        : `${preset.label} 브랜딩을 적용했습니다.`
+    );
     setError("");
   }
 
@@ -1638,6 +1688,16 @@ export function App(): ReactElement {
                   <>
                     <strong>{selectedBrandingPreset.label}</strong>
                     <span>{selectedBrandingPreset.description}</span>
+                    <div className="branding-state-row" aria-label="브랜딩 적용 상태">
+                      <span className={["branding-state-badge", brandingBodyState].join(" ")}>
+                        {brandingBodyStateLabel}
+                      </span>
+                      <span className="branding-state-note">
+                        {selectedBrandingEffectItems.length > 0
+                          ? selectedBrandingEffectItems.join(" · ")
+                          : "적용할 기본값 없음"}
+                      </span>
+                    </div>
                     {selectedBrandingPreset.viewerTheme && (
                       <div className="branding-swatch-row" aria-hidden="true">
                         {Object.entries(compactViewerTheme(selectedBrandingPreset.viewerTheme) ?? {}).map(([key, value]) => (
@@ -1652,11 +1712,11 @@ export function App(): ReactElement {
               </div>
               <button
                 type="button"
-                className="branding-apply-button"
+                className={["branding-apply-button", brandingApplyPending ? "pending" : ""].filter(Boolean).join(" ")}
                 onClick={handleApplySelectedBrandingPreset}
                 disabled={!selectedBrandingPreset}
               >
-                브랜딩 적용
+                {selectedBrandingMetadataChanged ? "브랜딩 다시 적용" : "브랜딩 적용"}
               </button>
             </div>
           )}
