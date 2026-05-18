@@ -2129,7 +2129,6 @@ export function App(): ReactElement {
                       <div>
                         <div className="plugin-title-row">
                           <h3>{displayName}</h3>
-                          <span className="plugin-category">{pluginCategoryLabel(plugin.category)}</span>
                         </div>
                         <p className="plugin-description">{pluginDisplayDescription(plugin)}</p>
                         <div className="plugin-meta">
@@ -2162,23 +2161,41 @@ export function App(): ReactElement {
                         </ul>
                       </div>
                     )}
-                    <div className="plugin-chip-row" aria-label={`${displayName} 권한`}>
-                      {plugin.permissions.length === 0 ? (
-                        <span className="plugin-chip muted">권한 없음</span>
-                      ) : (
-                        plugin.permissions.map((permission) => (
-                          <span className="plugin-chip" key={permission}>
-                            {pluginPermissionLabel(permission)}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                    <div className="plugin-chip-row" aria-label={`${displayName} 확장 지점`}>
-                      {contributionLabels.map((label) => (
-                        <span className="plugin-chip contribution" key={label}>
-                          {label}
-                        </span>
-                      ))}
+                    <div className="plugin-badge-grid" aria-label={`${displayName} 플러그인 속성`}>
+                      <div className="plugin-badge-section">
+                        <strong className="plugin-badge-heading">분류</strong>
+                        <div className="plugin-chip-row">
+                          <span className="plugin-chip category">{pluginCategoryLabel(plugin.category)}</span>
+                        </div>
+                      </div>
+                      <div className="plugin-badge-section">
+                        <strong className="plugin-badge-heading">필요 권한</strong>
+                        <div className="plugin-chip-row">
+                          {plugin.permissions.length === 0 ? (
+                            <span className="plugin-chip muted">권한 없음</span>
+                          ) : (
+                            plugin.permissions.map((permission) => (
+                              <span className="plugin-chip" key={permission}>
+                                {pluginPermissionLabel(permission)}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                      <div className="plugin-badge-section">
+                        <strong className="plugin-badge-heading">제공 기능</strong>
+                        <div className="plugin-chip-row">
+                          {contributionLabels.length === 0 ? (
+                            <span className="plugin-chip muted">제공 기능 없음</span>
+                          ) : (
+                            contributionLabels.map((label) => (
+                              <span className="plugin-chip contribution" key={label}>
+                                {label}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </div>
                     {smtpPluginId && plugin.enabled && (
                       <div className="smtp-settings-panel">
