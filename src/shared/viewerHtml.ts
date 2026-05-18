@@ -168,6 +168,18 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       width: min(820px, calc(100% - 40px));
       margin: 0 auto;
     }
+    .document-inner h1 {
+      color: var(--accent);
+    }
+    .document-inner h2 {
+      border-left: 4px solid var(--accent);
+      padding: 5px 0 5px 10px;
+      color: var(--fg);
+      background: var(--accent-soft);
+    }
+    .document-inner h3 {
+      color: var(--fg);
+    }
     .document-inner table {
       width: 100%;
       border-collapse: collapse;

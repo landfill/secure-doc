@@ -134,11 +134,11 @@ Declares static brand presets for publish metadata and viewer presentation. A br
 
 - `issuer`: default issuer/organization text.
 - `watermarkText`: default private watermark text.
-- `viewerTheme`: optional offline viewer color values.
+- `viewerTheme`: optional document/editor preview and offline viewer color values.
 
 Viewer theme values must be literal `#rrggbb` colors. Presets must not reference remote images, external fonts, scripts, network URLs, PINs, PIN hashes, plaintext document bodies, DEKs, or KEKs.
 
-The renderer applies a selected preset before publishing. The branding picker shows whether the selected preset is applied, pending, or has been manually edited, and lists the metadata/viewer values the preset controls. The applied preset is shown in the publish dialog, and the viewer theme is stored inside encrypted private metadata so the generated HTML does not expose the selected brand colors before unlock. The generated viewer still keeps `connect-src 'none'` and does not load remote resources.
+The renderer applies a selected preset before publishing. The branding picker shows whether the selected preset is applied, pending, or has been manually edited, and lists the metadata/document/viewer values the preset controls. The editor and preview use the active preset's safe color tokens for document heading, border, link, code, and section treatments. The applied preset is shown in the publish dialog, and the viewer theme is stored inside encrypted private metadata so the generated HTML does not expose the selected brand colors before unlock. The generated viewer still keeps `connect-src 'none'` and does not load remote resources.
 
 ## IPC Contract
 

@@ -177,6 +177,8 @@ test("keeps branding viewer theme encrypted and applies only safe colors after u
   assert.equal(html.includes("#123456"), false);
   assert.match(html, /applyViewerTheme\(branding && branding\.viewerTheme\)/);
   assert.match(html, /document\.documentElement\.style\.setProperty\(variableName/);
+  assert.match(html, /\.document-inner h2/);
+  assert.match(html, /background: var\(--accent-soft\)/);
   assert.match(html, /connect-src 'none'/);
 });
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -33,6 +33,7 @@ import {
   type SmtpDeliveryPluginId
 } from "../../shared/plugins";
 import { compactViewerTheme } from "../../shared/branding";
+import type { SecureDocViewerTheme } from "../../shared/branding";
 import {
   CORE_DOCUMENT_TEMPLATES,
   DEFAULT_DOCUMENT_TEMPLATE_ID,
@@ -588,9 +589,27 @@ function brandingPresetEffectItems(preset: ResolvedPluginBrandingPresetContribut
     items.push(`워터마크: ${preset.watermarkText}`);
   }
   if (compactViewerTheme(preset.viewerTheme)) {
-    items.push("viewer 색상");
+    items.push("문서/viewer 컬러셋");
   }
   return items;
+}
+
+function documentBrandingStyle(theme: SecureDocViewerTheme | undefined): CSSProperties | undefined {
+  const compactTheme = compactViewerTheme(theme);
+  if (!compactTheme) {
+    return undefined;
+  }
+
+  return {
+    "--document-accent": compactTheme.accentColor,
+    "--document-accent-soft": compactTheme.accentSoftColor,
+    "--document-bg": compactTheme.backgroundColor,
+    "--document-surface": compactTheme.surfaceColor,
+    "--document-text": compactTheme.textColor,
+    "--document-muted": compactTheme.mutedTextColor,
+    "--document-border": compactTheme.documentBorderColor ?? compactTheme.accentColor,
+    "--document-line": compactTheme.borderColor
+  } as CSSProperties;
 }
 
 function compactPrivateMeta(
@@ -723,6 +742,10 @@ export function App(): ReactElement {
   const brandingBodyStateLabel =
     brandingBodyState === "pending" ? "브랜딩 미적용" : brandingBodyState === "custom" ? "값 수정됨" : brandingBodyState === "applied" ? "브랜딩 적용됨" : "선택 없음";
   const selectedBrandingEffectItems = selectedBrandingPreset ? brandingPresetEffectItems(selectedBrandingPreset) : [];
+  const activeDocumentBrandingStyle = useMemo(
+    () => documentBrandingStyle(activeBrandingPreset?.viewerTheme),
+    [activeBrandingPreset]
+  );
   const pinResult = useMemo(
     () => evaluatePinPolicy(pin, { minLength: effectivePublishPolicy.minimumPinLength }),
     [effectivePublishPolicy.minimumPinLength, pin]
@@ -1735,7 +1758,11 @@ export function App(): ReactElement {
           </details>
         </section>
 
-        <section className="panel editor-panel" aria-labelledby="editor-heading">
+        <section
+          className={["panel editor-panel", activeDocumentBrandingStyle ? "document-branded" : ""].filter(Boolean).join(" ")}
+          aria-labelledby="editor-heading"
+          style={activeDocumentBrandingStyle}
+        >
           <div className="section-heading">
             <h2 id="editor-heading">암호화 본문 작성</h2>
             <div className="mode-toggle editor-mode-toggle" aria-label="본문 작성 모드">

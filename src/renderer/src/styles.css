@@ -649,6 +649,12 @@ select:focus,
   border-color: var(--accent);
 }
 
+.document-branded .rich-editor {
+  border-top: 5px solid var(--document-border, var(--accent));
+  color: var(--document-text, var(--fg));
+  background: var(--document-surface, var(--surface));
+}
+
 .rich-editor .tiptap {
   min-height: 204px;
   outline: none;
@@ -673,12 +679,25 @@ select:focus,
   letter-spacing: 0;
 }
 
+.document-branded .rich-editor .tiptap h1,
+.document-branded .preview h1 {
+  color: var(--document-accent, var(--accent));
+}
+
 .rich-editor .tiptap h2,
 .preview h2 {
   margin: 22px 0 12px;
   font-size: 24px;
   line-height: 1.25;
   letter-spacing: 0;
+}
+
+.document-branded .rich-editor .tiptap h2,
+.document-branded .preview h2 {
+  border-left: 4px solid var(--document-accent, var(--accent));
+  padding: 5px 0 5px 10px;
+  color: var(--document-text, var(--fg));
+  background: var(--document-accent-soft, var(--accent-soft));
 }
 
 .rich-editor .tiptap h3,
@@ -710,6 +729,12 @@ select:focus,
   color: var(--muted);
 }
 
+.document-branded .rich-editor .tiptap blockquote,
+.document-branded .preview blockquote {
+  border-left-color: var(--document-accent, var(--accent));
+  color: var(--document-muted, var(--muted));
+}
+
 .rich-editor .tiptap pre,
 .preview pre {
   margin: 0 0 12px;
@@ -727,6 +752,11 @@ select:focus,
   background: var(--accent-soft);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.92em;
+}
+
+.document-branded .rich-editor .tiptap code,
+.document-branded .preview code {
+  background: var(--document-accent-soft, var(--accent-soft));
 }
 
 .rich-editor .tiptap pre code,
@@ -748,6 +778,11 @@ select:focus,
   color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.document-branded .rich-editor .tiptap a,
+.document-branded .preview a {
+  color: var(--document-accent, var(--accent));
 }
 
 .rich-editor .tiptap [data-align="center"],
@@ -776,6 +811,10 @@ select:focus,
   background: var(--surface-warm);
 }
 
+.document-branded .preview-band {
+  background: var(--document-bg, var(--surface-warm));
+}
+
 .preview-band h3 {
   margin: 0 0 12px;
   font-size: 14px;
@@ -789,6 +828,13 @@ select:focus,
   padding: 16px;
   line-height: 1.65;
   background: var(--surface);
+}
+
+.document-branded .preview {
+  border-color: var(--document-line, var(--border));
+  border-top: 5px solid var(--document-border, var(--accent));
+  color: var(--document-text, var(--fg));
+  background: var(--document-surface, var(--surface));
 }
 
 .editor-publish-row {
