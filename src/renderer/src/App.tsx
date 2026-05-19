@@ -635,6 +635,8 @@ export function App(): ReactElement {
   const [smtpBusyId, setSmtpBusyId] = useState<SmtpDeliveryPluginId | null>(null);
   const [smtpStatusById, setSmtpStatusById] = useState<Partial<Record<SmtpDeliveryPluginId, string>>>({});
   const [smtpErrorById, setSmtpErrorById] = useState<Partial<Record<SmtpDeliveryPluginId, string>>>({});
+  const [settingsStatus, setSettingsStatus] = useState("");
+  const [settingsError, setSettingsError] = useState("");
   const [syncPresetWithMetadata, setSyncPresetWithMetadata] = useState(true);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
@@ -839,10 +841,24 @@ export function App(): ReactElement {
   function handleLocaleChange(nextValue: string): void {
     const nextLocale = resolveLocale(nextValue);
     const previousLocale = locale;
+    const preferencesApi = window.secureDoc?.savePreferences;
     setLocale(nextLocale);
     setViewerLocale((current) => (current === previousLocale ? nextLocale : current));
-    window.secureDoc?.savePreferences({ language: nextLocale }).catch(() => {
-      setError(translate(nextLocale, "main.preferencesSaveFailed"));
+    setSettingsStatus("");
+    setSettingsError("");
+    setError("");
+    if (!preferencesApi) {
+      const message = translate(nextLocale, "main.preferencesSaveFailed");
+      setSettingsError(message);
+      setError(message);
+      return;
+    }
+    preferencesApi({ language: nextLocale }).then(() => {
+      setSettingsStatus(translate(nextLocale, "main.preferencesSaved"));
+    }).catch(() => {
+      const message = translate(nextLocale, "main.preferencesSaveFailed");
+      setSettingsError(message);
+      setError(message);
     });
   }
 
@@ -2385,6 +2401,15 @@ export function App(): ReactElement {
           <div className="section-heading">
             <h2 id="settings-heading">{t("section.settings")}</h2>
           </div>
+          {(settingsStatus || settingsError) && (
+            <div
+              className={settingsError ? "settings-feedback error" : "settings-feedback success"}
+              role={settingsError ? "alert" : "status"}
+            >
+              <span className="settings-feedback-dot" aria-hidden="true" />
+              <span>{settingsError || settingsStatus}</span>
+            </div>
+          )}
           <div className="settings-list">
             <div className="settings-row">
               <div className="settings-row-copy">
