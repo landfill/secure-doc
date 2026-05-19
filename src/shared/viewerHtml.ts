@@ -1,5 +1,6 @@
-import { PACKAGE_SCHEMA, PACKAGE_VERSION, PUBLIC_UNLOCK_ERROR, type SecureDocPackage } from "./securePackage.ts";
+import { PACKAGE_SCHEMA, PACKAGE_VERSION, type SecureDocPackage } from "./securePackage.ts";
 import { PIN_MAX_LENGTH, PIN_MIN_LENGTH } from "./pinPolicy.ts";
+import { DEFAULT_LOCALE, resolveLocale, translate } from "./i18n.ts";
 
 export const VIEWER_CSP = [
   "default-src 'none'",
@@ -32,15 +33,18 @@ function escapeJsonForScript(value: unknown): string {
 }
 
 export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string {
-  const title = escapeHtml(securePackage.doc.title || "보안문서");
-  const issuer = escapeHtml(securePackage.doc.issuer || "");
-  const issuedAt = escapeHtml(securePackage.doc.issuedAt || "");
-  const expiresAt = securePackage.doc.displayExpiresAt ? escapeHtml(securePackage.doc.displayExpiresAt) : "";
-  const pinHelpText = `${PIN_MIN_LENGTH}자리 이상 ${PIN_MAX_LENGTH}자리 이내 PIN`;
+  const locale = resolveLocale(securePackage.ui.language ?? DEFAULT_LOCALE);
+  const rawTitle = securePackage.doc.title || translate(locale, "viewer.documentFallbackTitle");
+  const title = escapeHtml(rawTitle);
+  const issuer = securePackage.doc.issuer || "";
+  const issuedAt = securePackage.doc.issuedAt || "";
+  const expiresAt = securePackage.doc.displayExpiresAt || "";
+  const pinHelpText = translate(locale, "viewer.pinHelp", { min: PIN_MIN_LENGTH, max: PIN_MAX_LENGTH });
+  const unlockError = securePackage.ui.unlockError || translate(locale, "viewer.unlockError");
   const packageJson = escapeJsonForScript(securePackage);
 
   return `<!doctype html>
-<html lang="ko">
+<html lang="${locale}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -282,20 +286,20 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     <header>
       <h1>${title}</h1>
       <div class="meta">
-        ${issuer ? `<span>발행자: ${issuer}</span>` : ""}
-        ${issuedAt ? `<span>발행일: ${issuedAt}</span>` : ""}
-        ${expiresAt ? `<span>표시용 만료일: ${expiresAt}</span>` : ""}
+        ${issuer ? `<span>${escapeHtml(translate(locale, "viewer.issuer", { issuer }))}</span>` : ""}
+        ${issuedAt ? `<span>${escapeHtml(translate(locale, "viewer.issuedAt", { issuedAt }))}</span>` : ""}
+        ${expiresAt ? `<span>${escapeHtml(translate(locale, "viewer.expiresAt", { expiresAt }))}</span>` : ""}
       </div>
     </header>
     <main>
       <form id="unlock-form" class="unlock" autocomplete="off">
-        <h2>보안문서 열람</h2>
-        <p>이 문서는 암호화되어 있습니다. 별도 안내받은 ${pinHelpText}을 입력하세요.</p>
+        <h2>${escapeHtml(translate(locale, "viewer.unlockTitle"))}</h2>
+        <p>${escapeHtml(translate(locale, "viewer.unlockHelp", { pinHelp: pinHelpText }))}</p>
         <label>
-          문서 열람 PIN
+          ${escapeHtml(securePackage.ui.keyLabel || translate(locale, "viewer.pinLabel"))}
           <input id="pin-input" name="pin" type="password" autocomplete="one-time-code" required>
         </label>
-        <button id="unlock-button" type="submit">열람하기</button>
+        <button id="unlock-button" type="submit">${escapeHtml(translate(locale, "viewer.unlockButton"))}</button>
         <p id="status" class="status" aria-live="polite"></p>
         <p id="error" class="error" aria-live="assertive"></p>
       </form>
@@ -311,7 +315,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
   "use strict";
   const PACKAGE_SCHEMA = "${PACKAGE_SCHEMA}";
   const PACKAGE_VERSION = "${PACKAGE_VERSION}";
-  const PUBLIC_ERROR = "${PUBLIC_UNLOCK_ERROR}";
+  const PUBLIC_ERROR = ${escapeJsonForScript(unlockError)};
   const form = document.getElementById("unlock-form");
   const pinInput = document.getElementById("pin-input");
   const button = document.getElementById("unlock-button");
@@ -523,7 +527,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     event.preventDefault();
     button.disabled = true;
     error.textContent = "";
-    status.textContent = "문서를 복호화하는 중입니다.";
+    status.textContent = ${escapeJsonForScript(translate(locale, "viewer.decrypting"))};
     try {
       const content = await unlock(pinInput.value);
       documentInner.innerHTML = sanitizeHtml(content.html);

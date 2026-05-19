@@ -1,4 +1,9 @@
 import type { PluginContributions, PluginDescriptor, SmtpDeliveryPluginId } from "./plugins";
+import type { Locale } from "./i18n";
+
+export interface AppPreferences {
+  language: Locale;
+}
 
 export interface PublishHistoryRecord {
   documentId: string;
@@ -13,12 +18,14 @@ export interface PublishHistoryRecord {
   createdBy: string;
   outputPath: string;
   platform: string;
+  viewerLanguage?: Locale;
 }
 
 export interface SavePackageRequest {
   suggestedFileName: string;
   html: string;
   history: Omit<PublishHistoryRecord, "packageSha256" | "outputPath" | "platform">;
+  language?: Locale;
 }
 
 export interface SavePackageResult {
@@ -74,6 +81,7 @@ export type PackageIntegrityStatus = "verified" | "missing" | "tampered";
 export interface PackageIntegrityRequest {
   documentId: string;
   outputPath: string;
+  language?: Locale;
 }
 
 export interface PackageIntegrityReport {
@@ -109,6 +117,8 @@ export interface SecureDocPluginApi {
 }
 
 export interface SecureDocDesktopApi {
+  getPreferences(): Promise<AppPreferences>;
+  savePreferences(preferences: AppPreferences): Promise<AppPreferences>;
   savePackage(request: SavePackageRequest): Promise<SavePackageResult>;
   getHistory(): Promise<PublishHistoryRecord[]>;
   verifyPackageIntegrity(request: PackageIntegrityRequest): Promise<PackageIntegrityReport>;

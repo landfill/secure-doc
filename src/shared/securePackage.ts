@@ -1,6 +1,7 @@
 import { assertValidPin, DEFAULT_PIN_KDF_ITERATIONS, PIN_MAX_LENGTH, PIN_MIN_LENGTH } from "./pinPolicy.ts";
 import { base64UrlToBytes, bytesEqual, bytesToBase64Url, utf8Decode, utf8Encode } from "./encoding.ts";
 import type { SecureDocViewerTheme } from "./branding.ts";
+import { DEFAULT_LOCALE, resolveLocale, translate, type Locale } from "./i18n.ts";
 
 export const PACKAGE_SCHEMA = "com.company.secure-html-doc";
 export const PACKAGE_VERSION = "1.0.0";
@@ -66,8 +67,10 @@ export interface SecureDocPackage {
     };
   };
   ui: {
-    keyLabel: "문서 열람 PIN";
-    helpText: "별도 안내받은 6자리 이상 15자리 이내 PIN을 입력하세요.";
+    language?: Locale;
+    keyLabel: string;
+    helpText: string;
+    unlockError?: string;
     keyPolicy: {
       type: "pin-code";
       minLength: number;
@@ -84,6 +87,7 @@ export interface IssueSecureDocumentOptions {
   pin: string;
   metadata: SecureDocMetadataInput;
   iterations?: number;
+  viewerLocale?: Locale;
 }
 
 export class SecureDocUnlockError extends Error {
@@ -164,7 +168,8 @@ async function deriveKek(pin: string, salt: Uint8Array, iterations: number): Pro
 
 export async function issueSecureDocument(options: IssueSecureDocumentOptions): Promise<SecureDocPackage> {
   const crypto = getCrypto();
-  const pin = assertValidPin(options.pin);
+  const viewerLocale = resolveLocale(options.viewerLocale ?? DEFAULT_LOCALE);
+  const pin = assertValidPin(options.pin, { locale: viewerLocale });
   const iterations = options.iterations ?? DEFAULT_PIN_KDF_ITERATIONS;
   const issuedAt = options.metadata.issuedAt ?? new Date().toISOString();
 
@@ -238,8 +243,12 @@ export async function issueSecureDocument(options: IssueSecureDocumentOptions): 
       }
     },
     ui: {
-      keyLabel: "문서 열람 PIN",
-      helpText: "별도 안내받은 6자리 이상 15자리 이내 PIN을 입력하세요.",
+      language: viewerLocale,
+      keyLabel: translate(viewerLocale, "viewer.pinLabel"),
+      helpText: translate(viewerLocale, "viewer.unlockHelp", {
+        pinHelp: translate(viewerLocale, "viewer.pinHelp", { min: PIN_MIN_LENGTH, max: PIN_MAX_LENGTH })
+      }),
+      unlockError: translate(viewerLocale, "viewer.unlockError"),
       keyPolicy: {
         type: "pin-code",
         minLength: PIN_MIN_LENGTH,

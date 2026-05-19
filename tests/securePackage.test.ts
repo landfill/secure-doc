@@ -91,6 +91,31 @@ test("does not expose plaintext body or PIN in the package HTML", async () => {
   assert.doesNotMatch(html, /type="number"/);
 });
 
+test("stores viewer language metadata and renders localized viewer text", async () => {
+  const pkg = await issueSecureDocument({
+    content,
+    pin,
+    iterations: 1000,
+    viewerLocale: "en",
+    metadata: {
+      id: "doc_20260512_i18n",
+      title: "Secure notice",
+      issuer: "Secure Doc Team",
+      issuedAt: "2026-05-12T09:00:00+09:00"
+    }
+  });
+
+  const html = buildSecureHtmlDocument(pkg);
+
+  assert.equal(pkg.ui.language, "en");
+  assert.equal(pkg.ui.keyLabel, "Document unlock PIN");
+  assert.equal(pkg.ui.unlockError, "The PIN is incorrect or the document is damaged.");
+  assert.match(html, /<html lang="en">/);
+  assert.match(html, /Open secure document/);
+  assert.match(html, /The PIN is incorrect or the document is damaged\./);
+  assert.doesNotMatch(html, /보안문서 열람/);
+});
+
 test("supports non-BMP PINs without native UTF-16 length truncation in the viewer", async () => {
   const emojiPin = "😀😁😂🤣😃😄😅😆";
   const pkg = await issueSecureDocument({

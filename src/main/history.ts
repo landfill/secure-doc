@@ -1,10 +1,12 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PublishHistoryRecord } from "../shared/desktopApi";
+import { isLocale, type Locale } from "../shared/i18n.ts";
 
 interface HistoryStore {
   add(record: PublishHistoryRecord): Promise<void>;
   list(): Promise<PublishHistoryRecord[]>;
+  close(): void;
 }
 
 type SqliteStatement = {
@@ -13,12 +15,17 @@ type SqliteStatement = {
 };
 
 type SqliteDatabase = {
+  close(): void;
   exec(sql: string): void;
   prepare(sql: string): SqliteStatement;
 };
 
 type NodeSqliteModule = {
   DatabaseSync: new (path: string) => SqliteDatabase;
+};
+
+type StoredPublishHistoryRecord = Omit<PublishHistoryRecord, "viewerLanguage"> & {
+  viewerLanguage?: Locale | null;
 };
 
 class SqliteHistoryStore implements HistoryStore {
@@ -40,9 +47,14 @@ class SqliteHistoryStore implements HistoryStore {
         created_by TEXT NOT NULL,
         output_path TEXT NOT NULL,
         platform TEXT NOT NULL,
+        viewer_language TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    const columns = this.db.prepare("PRAGMA table_info(publish_history)").all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === "viewer_language")) {
+      this.db.exec("ALTER TABLE publish_history ADD COLUMN viewer_language TEXT");
+    }
   }
 
   async add(record: PublishHistoryRecord): Promise<void> {
@@ -60,8 +72,9 @@ class SqliteHistoryStore implements HistoryStore {
           content_alg,
           created_by,
           output_path,
-          platform
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          platform,
+          viewer_language
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         record.documentId,
@@ -75,12 +88,13 @@ class SqliteHistoryStore implements HistoryStore {
         record.contentAlg,
         record.createdBy,
         record.outputPath,
-        record.platform
+        record.platform,
+        record.viewerLanguage ?? null
       );
   }
 
   async list(): Promise<PublishHistoryRecord[]> {
-    return this.db
+    const rows = this.db
       .prepare(`
         SELECT
           document_id AS documentId,
@@ -94,17 +108,31 @@ class SqliteHistoryStore implements HistoryStore {
           content_alg AS contentAlg,
           created_by AS createdBy,
           output_path AS outputPath,
-          platform
+          platform,
+          viewer_language AS viewerLanguage
         FROM publish_history
         ORDER BY issued_at DESC
         LIMIT 100
       `)
-      .all() as PublishHistoryRecord[];
+      .all() as StoredPublishHistoryRecord[];
+
+    return rows.map((row) => ({
+      ...row,
+      viewerLanguage: isLocale(row.viewerLanguage) ? row.viewerLanguage : undefined
+    }));
+  }
+
+  close(): void {
+    this.db.close();
   }
 }
 
 class JsonlHistoryStore implements HistoryStore {
-  constructor(private readonly filePath: string) {}
+  private readonly filePath: string;
+
+  constructor(filePath: string) {
+    this.filePath = filePath;
+  }
 
   async add(record: PublishHistoryRecord): Promise<void> {
     await appendFile(this.filePath, `${JSON.stringify(record)}\n`, "utf8");
@@ -123,6 +151,8 @@ class JsonlHistoryStore implements HistoryStore {
       return [];
     }
   }
+
+  close(): void {}
 }
 
 export async function createHistoryStore(userDataPath: string): Promise<HistoryStore> {

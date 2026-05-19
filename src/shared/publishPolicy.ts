@@ -5,6 +5,7 @@ import {
   evaluatePinPolicy,
   normalizePin
 } from "./pinPolicy.ts";
+import { DEFAULT_LOCALE, translate, type Locale } from "./i18n.ts";
 import type { ResolvedPluginPolicyProfileContribution } from "./plugins.ts";
 
 export const PUBLISH_POLICY_METADATA_FIELDS = [
@@ -36,6 +37,10 @@ export const PUBLISH_POLICY_METADATA_FIELD_REQUIRED_MESSAGES = {
   displayExpiresAt: "만료일을 입력하세요."
 } as const satisfies Record<PublishPolicyMetadataField, string>;
 
+export function publishPolicyMetadataFieldLabel(field: PublishPolicyMetadataField, locale: Locale = DEFAULT_LOCALE): string {
+  return translate(locale, `policy.field.${field}`);
+}
+
 export interface PublishPolicyMetadata {
   title: string;
   issuer: string;
@@ -60,6 +65,7 @@ export interface PublishPolicyEvaluationInput {
   iterations: number;
   contentText: string;
   policyProfiles: readonly ResolvedPluginPolicyProfileContribution[];
+  locale?: Locale;
 }
 
 export interface PublishPolicyEvaluation {
@@ -102,42 +108,44 @@ export function getEffectivePublishPolicy(
 
 export function evaluatePublishPolicy(input: PublishPolicyEvaluationInput): PublishPolicyEvaluation {
   const requirements = getEffectivePublishPolicy(input.policyProfiles);
+  const locale = input.locale ?? DEFAULT_LOCALE;
   const pinResult = evaluatePinPolicy(input.pin, {
     minLength: requirements.minimumPinLength,
-    maxLength: PIN_MAX_LENGTH
+    maxLength: PIN_MAX_LENGTH,
+    locale
   });
   const messages: string[] = [];
 
   if (isBlank(input.metadata.title)) {
-    messages.push("문서 제목을 입력하세요.");
+    messages.push(translate(locale, "policy.error.titleRequired"));
   }
   if (isBlank(input.metadata.issuer)) {
-    messages.push("발행자를 입력하세요.");
+    messages.push(translate(locale, "policy.error.issuerRequired"));
   }
 
   if (!pinResult.valid) {
     messages.push(pinResult.message);
   }
   if (pinResult.normalizedPin !== normalizePin(input.pinConfirm)) {
-    messages.push("PIN 확인 입력이 일치하지 않습니다.");
+    messages.push(translate(locale, "policy.error.pinConfirmMismatch"));
   }
 
   if (input.iterations < requirements.minimumKdfIterations) {
-    messages.push(`PBKDF2 반복 횟수는 현재 정책에 따라 ${requirements.minimumKdfIterations.toLocaleString()}회 이상이어야 합니다.`);
+    messages.push(translate(locale, "policy.error.kdfIterations", { count: requirements.minimumKdfIterations.toLocaleString() }));
   }
 
   for (const field of requirements.requiredMetadata) {
     if (isBlank(input.metadata[field])) {
-      messages.push(PUBLISH_POLICY_METADATA_FIELD_REQUIRED_MESSAGES[field]);
+      messages.push(translate(locale, `policy.error.${field}Required`));
     }
   }
 
   if (requirements.requireWatermark && isBlank(input.metadata.watermarkText)) {
-    messages.push("워터마크 문구를 입력하세요.");
+    messages.push(translate(locale, "policy.error.watermarkRequired"));
   }
 
   if (!input.contentText.trim()) {
-    messages.push("암호화할 본문을 입력하세요.");
+    messages.push(translate(locale, "policy.error.contentRequired"));
   }
 
   return {
