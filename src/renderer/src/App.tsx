@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactEle
 import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { NavIcon } from "./NavIcon";
 import type {
+  AppInfo,
   PackageIntegrityReport,
   PublishHistoryRecord,
   SaveSmtpSettingsRequest,
@@ -71,7 +73,7 @@ type EditorMode = "visual" | "html";
 type HeadingLevel = 1 | 2 | 3;
 type BlockStyle = "paragraph" | `heading-${HeadingLevel}`;
 type TextAlign = "left" | "center" | "right" | "justify";
-type NavTarget = "document" | "security" | "history" | "plugins";
+type NavTarget = "document" | "history" | "security" | "plugins" | "settings";
 const documentTypes = ["안내문", "계약서", "정책/규정", "기타", "보험증서", "고지서"] as const;
 type DocumentType = (typeof documentTypes)[number];
 
@@ -169,7 +171,11 @@ const defaultEmailSendForm: EmailSendForm = {
   attachmentFileName: ""
 };
 
-const navigationTargets: readonly NavTarget[] = ["document", "history", "security", "plugins"];
+const navigationTargets: readonly NavTarget[] = ["document", "history", "security", "plugins", "settings"];
+const fallbackAppInfo: AppInfo = {
+  name: "Secure Doc Admin",
+  version: ""
+};
 
 const documentTypeTranslationKeys: Record<DocumentType, TranslationKey> = {
   "안내문": "template.category.notice",
@@ -607,6 +613,7 @@ function normalizeLinkHref(value: string): string | null {
 }
 
 export function App(): ReactElement {
+  const [appInfo, setAppInfo] = useState<AppInfo>(fallbackAppInfo);
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
   const [viewerLocale, setViewerLocale] = useState<Locale>(DEFAULT_LOCALE);
   const [metadata, setMetadata] = useState<MetadataState>(defaultMetadata);
@@ -651,6 +658,8 @@ export function App(): ReactElement {
     () => navigationTargets.map((id) => ({ id, label: t(`nav.${id}` as TranslationKey) })),
     [locale]
   );
+  const activeNavigationItem = navigationItems.find((item) => item.id === activeNavTarget) ?? navigationItems[0];
+  const appVersionLabel = appInfo.version ? `v${appInfo.version}` : "-";
 
   const activePolicyProfiles = pluginContributions.policyProfiles;
   const effectivePublishPolicy = useMemo(() => getEffectivePublishPolicy(activePolicyProfiles), [activePolicyProfiles]);
@@ -877,6 +886,7 @@ export function App(): ReactElement {
   }
 
   useEffect(() => {
+    window.secureDoc?.getAppInfo().then(setAppInfo).catch(() => setAppInfo(fallbackAppInfo));
     window.secureDoc?.getPreferences().then((preferences) => {
       const nextLocale = resolveLocale(preferences.language);
       setLocale(nextLocale);
@@ -1589,7 +1599,13 @@ export function App(): ReactElement {
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label={t("app.adminMenu")}>
-        <div className="brand">Secure Doc</div>
+        <div className="brand">
+          <span className="brand-copy">
+            <span className="brand-kicker">Secure Doc</span>
+            <span className="brand-title">Admin</span>
+            <span className="brand-subtitle">{t("app.sidebarSubtitle")}</span>
+          </span>
+        </div>
         <nav className="nav">
           {navigationItems.map((item) => (
             <button
@@ -1599,32 +1615,24 @@ export function App(): ReactElement {
               aria-current={activeNavTarget === item.id ? "page" : undefined}
               onClick={() => switchScreen(item)}
             >
-              {item.label}
+              <span className="nav-icon-wrap">
+                <NavIcon target={item.id} />
+              </span>
+              <span className="nav-label">{item.label}</span>
             </button>
           ))}
-          <span className="group-label">{t("nav.distributionTargets")}</span>
-          <span className="nav-note">macOS universal</span>
-          <span className="nav-note">Windows x64</span>
         </nav>
         <div className="sidebar-utility">
-          <label className="language-switcher">
-            {t("app.language")}
-            <select value={locale} onChange={(event) => handleLocaleChange(event.target.value)}>
-              {SUPPORTED_LOCALES.map((item) => (
-                <option key={item} value={item}>
-                  {translate(item, `locale.${item}` as TranslationKey)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <span className="sidebar-version-label">{t("settings.previewRelease")}</span>
+          <span className="sidebar-version">{appVersionLabel}</span>
         </div>
       </aside>
 
       <main className="main-column">
         <header className="topbar">
           <div>
-            <p className="eyebrow">WebCrypto Offline Secure Document</p>
-            <h1>Secure Doc Admin</h1>
+            <p className="eyebrow">{appInfo.name}</p>
+            <h1>{activeNavigationItem.label}</h1>
           </div>
           <div className="platforms" aria-label={t("app.statusLabel")}>
             <span>{t("app.offlineStatus")}</span>
@@ -2366,6 +2374,55 @@ export function App(): ReactElement {
               ))}
             </div>
           )}
+        </section>
+        )}
+
+        {activeNavTarget === "settings" && (
+        <section
+          className="panel settings-panel"
+          aria-labelledby="settings-heading"
+        >
+          <div className="section-heading">
+            <h2 id="settings-heading">{t("section.settings")}</h2>
+          </div>
+          <div className="settings-list">
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <strong>{t("settings.displayLanguage")}</strong>
+                <span>{t("settings.displayLanguageDescription")}</span>
+              </div>
+              <label className="settings-control">
+                <span className="sr-only">{t("settings.displayLanguage")}</span>
+                <select value={locale} onChange={(event) => handleLocaleChange(event.target.value)}>
+                  {SUPPORTED_LOCALES.map((item) => (
+                    <option key={item} value={item}>
+                      {translate(item, `locale.${item}` as TranslationKey)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <strong>{t("settings.appInfo")}</strong>
+                <span>{t("settings.appInfoDescription")}</span>
+              </div>
+              <dl className="settings-info-grid">
+                <div>
+                  <dt>{t("settings.product")}</dt>
+                  <dd>{appInfo.name}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.version")}</dt>
+                  <dd>{appVersionLabel}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.releaseChannel")}</dt>
+                  <dd>{t("settings.previewRelease")}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
         </section>
         )}
         </div>
