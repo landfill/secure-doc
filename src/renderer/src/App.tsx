@@ -1082,7 +1082,14 @@ export function App(): ReactElement {
       setSelectedTemplateId(matchingTemplate.id);
     }
 
-    setStatus("");
+    setStatus(
+      matchingTemplate
+        ? t("document.typeClassifiedWithTemplate", {
+            docType: documentTypeLabel(docType, locale),
+            template: templateDisplayName(matchingTemplate, locale)
+          })
+        : t("document.typeClassified", { docType: documentTypeLabel(docType, locale) })
+    );
     setError("");
   }
 
@@ -1620,7 +1627,7 @@ export function App(): ReactElement {
             <h1>Secure Doc Admin</h1>
           </div>
           <div className="platforms" aria-label={t("app.statusLabel")}>
-            <span>Offline</span>
+            <span>{t("app.offlineStatus")}</span>
             <span>AES-256-GCM</span>
           </div>
         </header>
