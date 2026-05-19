@@ -95,7 +95,7 @@ export function getEffectivePublishPolicy(
       ...policyProfiles.map((profile) => profile.minimumKdfIterations ?? CORE_PUBLISH_POLICY_MINIMUM_KDF_ITERATIONS)
     ),
     requiredMetadata: uniqueMetadataFields(requiredMetadata),
-    requireWatermark: CORE_PUBLISH_POLICY_REQUIRE_WATERMARK || policyProfiles.some((profile) => profile.requireWatermark === true),
+    requireWatermark: CORE_PUBLISH_POLICY_REQUIRE_WATERMARK,
     profileLabels: policyProfiles.map((profile) => profile.label)
   };
 }

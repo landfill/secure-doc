@@ -641,6 +641,10 @@ export function App(): ReactElement {
 
   const activePolicyProfiles = pluginContributions.policyProfiles;
   const effectivePublishPolicy = useMemo(() => getEffectivePublishPolicy(activePolicyProfiles), [activePolicyProfiles]);
+  const kdfIterationOptions = useMemo(
+    () => [...new Set([DEFAULT_PIN_KDF_ITERATIONS, effectivePublishPolicy.minimumKdfIterations])].sort((left, right) => left - right),
+    [effectivePublishPolicy.minimumKdfIterations]
+  );
   const publishPolicyRequirementItems = useMemo(() => {
     const items = [
       `PIN ${effectivePublishPolicy.minimumPinLength}-${PIN_MAX_LENGTH}자리`,
@@ -2359,7 +2363,12 @@ export function App(): ReactElement {
               <label className="field-iterations">
                 PBKDF2 반복 횟수
                 <select value={iterations} onChange={(event) => setIterations(Number(event.target.value))}>
-                  <option value={DEFAULT_PIN_KDF_ITERATIONS}>1,000,000 기본</option>
+                  {kdfIterationOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option.toLocaleString()}
+                      {option === DEFAULT_PIN_KDF_ITERATIONS ? " 기본" : " 정책 요구사항"}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
