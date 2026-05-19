@@ -1599,6 +1599,18 @@ export function App(): ReactElement {
           <span className="nav-note">macOS universal</span>
           <span className="nav-note">Windows x64</span>
         </nav>
+        <div className="sidebar-utility">
+          <label className="language-switcher">
+            {t("app.language")}
+            <select value={locale} onChange={(event) => handleLocaleChange(event.target.value)}>
+              {SUPPORTED_LOCALES.map((item) => (
+                <option key={item} value={item}>
+                  {translate(item, `locale.${item}` as TranslationKey)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </aside>
 
       <main className="main-column">
@@ -1607,21 +1619,9 @@ export function App(): ReactElement {
             <p className="eyebrow">WebCrypto Offline Secure Document</p>
             <h1>Secure Doc Admin</h1>
           </div>
-          <div className="topbar-actions">
-            <label className="language-switcher">
-              {t("app.language")}
-              <select value={locale} onChange={(event) => handleLocaleChange(event.target.value)}>
-                {SUPPORTED_LOCALES.map((item) => (
-                  <option key={item} value={item}>
-                    {translate(item, `locale.${item}` as TranslationKey)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="platforms" aria-label={t("app.statusLabel")}>
-              <span>Offline</span>
-              <span>AES-256-GCM</span>
-            </div>
+          <div className="platforms" aria-label={t("app.statusLabel")}>
+            <span>Offline</span>
+            <span>AES-256-GCM</span>
           </div>
         </header>
 
