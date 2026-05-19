@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { SavePackageRequest, SavePackageResult, SecureDocDesktopApi } from "../shared/desktopApi";
+import type {
+  PackageIntegrityReport,
+  PackageIntegrityRequest,
+  SavePackageRequest,
+  SavePackageResult,
+  SecureDocDesktopApi
+} from "../shared/desktopApi";
 
 const api: SecureDocDesktopApi = {
   savePackage(request: SavePackageRequest): Promise<SavePackageResult> {
@@ -7,6 +13,9 @@ const api: SecureDocDesktopApi = {
   },
   getHistory() {
     return ipcRenderer.invoke("secure-doc:get-history");
+  },
+  verifyPackageIntegrity(request: PackageIntegrityRequest): Promise<PackageIntegrityReport> {
+    return ipcRenderer.invoke("secure-doc:verify-package-integrity", request);
   },
   showItemInFolder(filePath: string) {
     return ipcRenderer.invoke("secure-doc:show-item-in-folder", filePath);

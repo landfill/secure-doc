@@ -69,16 +69,14 @@ export interface SmtpConnectionTestResult {
   ok: true;
 }
 
-export type AuditPackageIntegrityStatus = "verified" | "missing" | "tampered";
+export type PackageIntegrityStatus = "verified" | "missing" | "tampered";
 
-export interface AuditPackageIntegrityRequest {
+export interface PackageIntegrityRequest {
   documentId: string;
   outputPath: string;
 }
 
-export interface AuditPackageIntegrityReport {
-  pluginId: "audit.integrity.report";
-  actionId: "verify-package";
+export interface PackageIntegrityReport {
   documentId: string;
   title: string;
   issuer: string;
@@ -92,13 +90,13 @@ export interface AuditPackageIntegrityReport {
   outputPath: string;
   platform: string;
   checkedAt: string;
-  status: AuditPackageIntegrityStatus;
+  status: PackageIntegrityStatus;
   message: string;
 }
 
 export type PluginSettingsView = SmtpSettingsView;
 export type SavePluginSettingsRequest = SaveSmtpSettingsRequest;
-export type PluginActionResult = SmtpConnectionTestResult | SendSmtpEmailResult | AuditPackageIntegrityReport;
+export type PluginActionResult = SmtpConnectionTestResult | SendSmtpEmailResult;
 
 export interface SecureDocPluginApi {
   list(): Promise<PluginDescriptor[]>;
@@ -113,6 +111,7 @@ export interface SecureDocPluginApi {
 export interface SecureDocDesktopApi {
   savePackage(request: SavePackageRequest): Promise<SavePackageResult>;
   getHistory(): Promise<PublishHistoryRecord[]>;
+  verifyPackageIntegrity(request: PackageIntegrityRequest): Promise<PackageIntegrityReport>;
   showItemInFolder(filePath: string): Promise<void>;
   plugins: SecureDocPluginApi;
 }

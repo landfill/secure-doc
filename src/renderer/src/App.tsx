@@ -3,15 +3,13 @@ import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type {
-  AuditPackageIntegrityReport,
+  PackageIntegrityReport,
   PublishHistoryRecord,
   SaveSmtpSettingsRequest,
   SendSmtpEmailResult,
   SmtpSettingsView
 } from "../../shared/desktopApi";
 import {
-  AUDIT_INTEGRITY_HISTORY_ACTION_ID,
-  AUDIT_INTEGRITY_PLUGIN_ID,
   COMPANY_DEFAULT_BRANDING_PLUGIN_ID,
   EMPTY_PLUGIN_CONTRIBUTIONS,
   GENERIC_SMTP_HISTORY_SEND_ACTION_ID,
@@ -22,7 +20,6 @@ import {
   GMAIL_SMTP_PLUGIN_ID,
   GMAIL_SMTP_SEND_ACTION_ID,
   GMAIL_SMTP_TEST_ACTION_ID,
-  STRICT_PIN_POLICY_PLUGIN_ID,
   SMTP_DELIVERY_PLUGIN_IDS,
   isSmtpDeliveryPluginId,
   type PluginCategory,
@@ -46,13 +43,11 @@ import {
   type DocumentTemplateMetadata
 } from "../../shared/documentTemplates";
 import {
-  COMPAT_PIN_KDF_ITERATIONS,
   DEFAULT_PIN_KDF_ITERATIONS,
   evaluatePinPolicy,
   GENERATED_PIN_LENGTH,
   generatePin,
-  PIN_MAX_LENGTH,
-  PIN_MIN_LENGTH
+  PIN_MAX_LENGTH
 } from "../../shared/pinPolicy";
 import {
   PUBLISH_POLICY_METADATA_FIELD_LABELS,
@@ -221,14 +216,8 @@ function pluginDisplayName(plugin: PluginDescriptor): string {
   if (plugin.id === GENERIC_SMTP_PLUGIN_ID) {
     return "Generic SMTP 발송";
   }
-  if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
-    return "패키지 무결성 감사";
-  }
   if (plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID) {
     return "조직 기본 브랜딩";
-  }
-  if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
-    return "엄격 발행 정책";
   }
   return plugin.name;
 }
@@ -240,14 +229,8 @@ function pluginDisplayDescription(plugin: PluginDescriptor): string {
   if (plugin.id === GENERIC_SMTP_PLUGIN_ID) {
     return "설정된 SMTP 서버를 통해 발행된 보안 HTML 패키지를 전송합니다.";
   }
-  if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
-    return "저장된 보안 HTML 파일이 발행 당시 기록된 SHA-256 해시와 일치하는지 검사합니다.";
-  }
   if (plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID) {
     return "조직명, 기본 워터마크, 오프라인 viewer 색상 preset을 발행 문서에 적용합니다.";
-  }
-  if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
-    return "문서 발행 전 더 긴 PIN, 강한 KDF, 필수 메타데이터 입력을 요구합니다.";
   }
   return plugin.description;
 }
@@ -265,20 +248,6 @@ function pluginFeatureDescriptions(plugin: PluginDescriptor): string[] {
       "내부 SMTP 호스트, 포트, STARTTLS 모드, 발신자 주소, 사용자 이름 및 비밀번호를 설정합니다.",
       "메인 프로세스에서 발행 이력을 확인하고 전송 전 저장된 패키지 해시를 검증합니다.",
       "SMTP 인증 정보와 원본 전송 오류는 렌더러로 반환되지 않습니다."
-    ];
-  }
-  if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID) {
-    return [
-      "발행 이력에서 저장된 HTML 파일의 SHA-256 해시를 다시 계산합니다.",
-      "발행 당시 기록된 해시와 비교해 정상, 파일 없음, 변조 의심 상태를 보여줍니다.",
-      "PIN, 평문 본문, 암호화 키를 리포트에 포함하지 않습니다."
-    ];
-  }
-  if (plugin.id === STRICT_PIN_POLICY_PLUGIN_ID) {
-    return [
-      "발행 전 PIN 10자리 이상과 PBKDF2 1,000,000회 이상을 요구합니다.",
-      "수신자, 문서번호, 만료일, 워터마크 문구 누락을 발행 전에 차단합니다.",
-      "PIN, PIN hash, 평문 본문, 암호화 키를 저장하지 않는 선언형 정책입니다."
     ];
   }
   if (plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID) {
@@ -396,12 +365,6 @@ function smtpTestActionId(pluginId: SmtpDeliveryPluginId): string {
 
 function smtpSecretSaved(settings: SmtpSettingsView | undefined): boolean {
   return Boolean(settings?.hasPassword || settings?.hasAppPassword);
-}
-
-function hasActiveAuditIntegrityHistoryAction(contributions: PluginContributions): boolean {
-  return contributions.historyActions.some(
-    (action) => action.pluginId === AUDIT_INTEGRITY_PLUGIN_ID && action.id === AUDIT_INTEGRITY_HISTORY_ACTION_ID
-  );
 }
 
 function fileNameFromPath(filePath: string): string {
@@ -665,7 +628,7 @@ export function App(): ReactElement {
   const [emailBusy, setEmailBusy] = useState(false);
   const [preferredSmtpPluginId, setPreferredSmtpPluginId] = useState<SmtpDeliveryPluginId>(GMAIL_SMTP_PLUGIN_ID);
   const [auditBusyDocumentId, setAuditBusyDocumentId] = useState<string | null>(null);
-  const [auditReport, setAuditReport] = useState<AuditPackageIntegrityReport | null>(null);
+  const [auditReport, setAuditReport] = useState<PackageIntegrityReport | null>(null);
   const [activeNavTarget, setActiveNavTarget] = useState<NavTarget>("document");
   const [selectedTemplateId, setSelectedTemplateId] = useState(DEFAULT_DOCUMENT_TEMPLATE_ID);
   const [activeTemplateId, setActiveTemplateId] = useState(DEFAULT_DOCUMENT_TEMPLATE_ID);
@@ -678,6 +641,10 @@ export function App(): ReactElement {
 
   const activePolicyProfiles = pluginContributions.policyProfiles;
   const effectivePublishPolicy = useMemo(() => getEffectivePublishPolicy(activePolicyProfiles), [activePolicyProfiles]);
+  const kdfIterationOptions = useMemo(
+    () => [...new Set([DEFAULT_PIN_KDF_ITERATIONS, effectivePublishPolicy.minimumKdfIterations])].sort((left, right) => left - right),
+    [effectivePublishPolicy.minimumKdfIterations]
+  );
   const publishPolicyRequirementItems = useMemo(() => {
     const items = [
       `PIN ${effectivePublishPolicy.minimumPinLength}-${PIN_MAX_LENGTH}자리`,
@@ -773,7 +740,6 @@ export function App(): ReactElement {
   const activeSmtpSendAction = chooseSmtpAction(activeSmtpSendActions, preferredSmtpPluginId);
   const activeSmtpHistorySendAction = chooseSmtpAction(activeSmtpHistorySendActions, preferredSmtpPluginId);
   const smtpHistorySendActionEnabled = activeSmtpHistorySendActions.length > 0;
-  const auditHistoryActionEnabled = hasActiveAuditIntegrityHistoryAction(pluginContributions);
   const activeContributionBadges = [
     ...pluginContributions.publishActions.map((action) => `발행: ${action.label}`),
     ...pluginContributions.templates.map((template) => `템플릿: ${template.label}`),
@@ -862,10 +828,6 @@ export function App(): ReactElement {
         setSmtpErrorById((current) => ({ ...current, [plugin.id]: "" }));
       } else if (isSmtpDeliveryPluginId(plugin.id) && enabled) {
         setPreferredSmtpPluginId(plugin.id);
-      }
-      if (plugin.id === AUDIT_INTEGRITY_PLUGIN_ID && !enabled) {
-        setAuditReport(null);
-        setAuditBusyDocumentId(null);
       }
       setStatus(`${pluginDisplayName(plugin)} 플러그인을 ${enabled ? "활성화" : "비활성화"}했습니다.`);
     } catch (caught) {
@@ -1374,7 +1336,7 @@ export function App(): ReactElement {
     setEmailDialogOpen(true);
   }
 
-  function auditStatusLabel(report: AuditPackageIntegrityReport): string {
+  function auditStatusLabel(report: PackageIntegrityReport): string {
     if (report.status === "verified") {
       return "정상";
     }
@@ -1385,9 +1347,9 @@ export function App(): ReactElement {
   }
 
   async function handleAuditIntegrityReport(item: PublishHistoryRecord): Promise<void> {
-    const pluginApi = window.secureDoc?.plugins;
-    if (!pluginApi || !auditHistoryActionEnabled) {
-      setError("감사 플러그인을 사용할 수 없습니다.");
+    const desktopApi = window.secureDoc;
+    if (!desktopApi) {
+      setError("무결성 검증 기능을 사용할 수 없습니다.");
       return;
     }
 
@@ -1395,10 +1357,10 @@ export function App(): ReactElement {
     setStatus("감사 리포트를 생성 중입니다.");
     setError("");
     try {
-      const report = (await pluginApi.runAction(AUDIT_INTEGRITY_PLUGIN_ID, AUDIT_INTEGRITY_HISTORY_ACTION_ID, {
+      const report = await desktopApi.verifyPackageIntegrity({
         documentId: item.documentId,
         outputPath: item.outputPath
-      })) as AuditPackageIntegrityReport;
+      });
       setAuditReport(report);
       setStatus(report.message);
     } catch (caught) {
@@ -2057,7 +2019,7 @@ export function App(): ReactElement {
                         <button
                           type="button"
                           onClick={() => void handleAuditIntegrityReport(item)}
-                          disabled={!auditHistoryActionEnabled || auditBusyDocumentId === item.documentId}
+                          disabled={auditBusyDocumentId === item.documentId}
                         >
                           {auditBusyDocumentId === item.documentId ? "검증 중" : "검증"}
                         </button>
@@ -2106,6 +2068,9 @@ export function App(): ReactElement {
           <div className="section-heading">
             <h2 id="plugins-heading">플러그인</h2>
           </div>
+          <p className="security-note">
+            플러그인은 전달, 템플릿, 브랜딩, 보고 확장만 제공합니다. 암호화, PIN, viewer, CSP, 패키지 무결성 검증은 코어 기능입니다.
+          </p>
           <div className="plugin-list">
             {plugins.length === 0 ? (
               <div className="plugin-empty">등록된 built-in 플러그인이 없습니다.</div>
@@ -2398,8 +2363,12 @@ export function App(): ReactElement {
               <label className="field-iterations">
                 PBKDF2 반복 횟수
                 <select value={iterations} onChange={(event) => setIterations(Number(event.target.value))}>
-                  <option value={DEFAULT_PIN_KDF_ITERATIONS}>1,000,000 기본</option>
-                  <option value={COMPAT_PIN_KDF_ITERATIONS}>600,000 저사양 호환</option>
+                  {kdfIterationOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option.toLocaleString()}
+                      {option === DEFAULT_PIN_KDF_ITERATIONS ? " 기본" : " 정책 요구사항"}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>

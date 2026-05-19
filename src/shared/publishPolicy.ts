@@ -1,5 +1,5 @@
 import {
-  COMPAT_PIN_KDF_ITERATIONS,
+  DEFAULT_PIN_KDF_ITERATIONS,
   PIN_MAX_LENGTH,
   PIN_MIN_LENGTH,
   evaluatePinPolicy,
@@ -14,6 +14,15 @@ export const PUBLISH_POLICY_METADATA_FIELDS = [
 ] as const;
 
 export type PublishPolicyMetadataField = (typeof PUBLISH_POLICY_METADATA_FIELDS)[number];
+
+export const CORE_PUBLISH_POLICY_MINIMUM_PIN_LENGTH = PIN_MIN_LENGTH;
+export const CORE_PUBLISH_POLICY_MINIMUM_KDF_ITERATIONS = DEFAULT_PIN_KDF_ITERATIONS;
+export const CORE_PUBLISH_POLICY_REQUIRED_METADATA_FIELDS = [
+  "recipientName",
+  "documentNumber",
+  "displayExpiresAt"
+] as const satisfies readonly PublishPolicyMetadataField[];
+export const CORE_PUBLISH_POLICY_REQUIRE_WATERMARK = true;
 
 export const PUBLISH_POLICY_METADATA_FIELD_LABELS = {
   recipientName: "수신자",
@@ -71,16 +80,22 @@ function uniqueMetadataFields(fields: readonly PublishPolicyMetadataField[]): Pu
 export function getEffectivePublishPolicy(
   policyProfiles: readonly ResolvedPluginPolicyProfileContribution[]
 ): EffectivePublishPolicy {
-  const requiredMetadata = policyProfiles.flatMap((profile) => profile.requiredMetadata ?? []);
+  const requiredMetadata = [
+    ...CORE_PUBLISH_POLICY_REQUIRED_METADATA_FIELDS,
+    ...policyProfiles.flatMap((profile) => profile.requiredMetadata ?? [])
+  ];
 
   return {
-    minimumPinLength: Math.max(PIN_MIN_LENGTH, ...policyProfiles.map((profile) => profile.minimumPinLength ?? PIN_MIN_LENGTH)),
+    minimumPinLength: Math.max(
+      CORE_PUBLISH_POLICY_MINIMUM_PIN_LENGTH,
+      ...policyProfiles.map((profile) => profile.minimumPinLength ?? CORE_PUBLISH_POLICY_MINIMUM_PIN_LENGTH)
+    ),
     minimumKdfIterations: Math.max(
-      COMPAT_PIN_KDF_ITERATIONS,
-      ...policyProfiles.map((profile) => profile.minimumKdfIterations ?? COMPAT_PIN_KDF_ITERATIONS)
+      CORE_PUBLISH_POLICY_MINIMUM_KDF_ITERATIONS,
+      ...policyProfiles.map((profile) => profile.minimumKdfIterations ?? CORE_PUBLISH_POLICY_MINIMUM_KDF_ITERATIONS)
     ),
     requiredMetadata: uniqueMetadataFields(requiredMetadata),
-    requireWatermark: policyProfiles.some((profile) => profile.requireWatermark === true),
+    requireWatermark: CORE_PUBLISH_POLICY_REQUIRE_WATERMARK,
     profileLabels: policyProfiles.map((profile) => profile.label)
   };
 }

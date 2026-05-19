@@ -56,6 +56,28 @@ test("plugin store treats corrupt state files as empty state", async () => {
   });
 });
 
+test("plugin store ignores retired plugin ids left in persisted state", async () => {
+  await withTempUserData(async (userDataPath) => {
+    await writeFile(
+      join(userDataPath, "plugin-state.json"),
+      `${JSON.stringify({
+        enabledPluginIds: ["audit.integrity.report", "policy.strict-pin", "delivery.smtp.gmail"]
+      })}\n`,
+      "utf8"
+    );
+
+    const store = createPluginStore(userDataPath);
+    const descriptors = await store.list();
+    assert.equal(descriptors.some((plugin) => plugin.id === "audit.integrity.report"), false);
+    assert.equal(descriptors.some((plugin) => plugin.id === "policy.strict-pin"), false);
+    assert.equal(descriptors.find((plugin) => plugin.id === "delivery.smtp.gmail")?.enabled, true);
+
+    await store.setEnabled("delivery.smtp.gmail", true);
+    const persisted = JSON.parse(await readFile(join(userDataPath, "plugin-state.json"), "utf8"));
+    assert.deepEqual(persisted.enabledPluginIds, ["delivery.smtp.gmail"]);
+  });
+});
+
 test("plugin store serializes concurrent enablement updates", async () => {
   const manifests: PluginManifest[] = [
     {

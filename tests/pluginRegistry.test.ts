@@ -9,7 +9,7 @@ import {
   PLUGIN_PERMISSIONS,
   COMPANY_DEFAULT_BRANDING_PLUGIN_ID,
   GENERIC_SMTP_PLUGIN_ID,
-  STRICT_PIN_POLICY_PLUGIN_ID,
+  RETIRED_PLUGIN_IDS,
   buildPluginDescriptors,
   getEnabledPluginContributions,
   getPluginManifestContractViolations,
@@ -43,6 +43,7 @@ test("plugin category, permission, and contribution contracts are explicit", () 
     branding: ["branding."],
     policy: ["policy."]
   });
+  assert.deepEqual(RETIRED_PLUGIN_IDS, ["audit.integrity.report", "policy.strict-pin"]);
 });
 
 test("built-in plugin manifests expose stable ids, permissions, and extension points", () => {
@@ -81,19 +82,10 @@ test("built-in plugin manifests expose stable ids, permissions, and extension po
   assert.equal(genericSmtpPlugin.contributes.publishActions?.[0]?.id, "send-email");
   assert.equal(genericSmtpPlugin.contributes.historyActions?.[0]?.id, "send-email-from-history");
 
-  const auditPlugin = BUILT_IN_PLUGIN_MANIFESTS.find((plugin) => plugin.id === "audit.integrity.report");
-  assert.ok(auditPlugin);
-  assert.equal(auditPlugin.category, "audit");
-  assert.deepEqual(auditPlugin.permissions, ["history:read", "package:read"]);
-  assert.equal(auditPlugin.contributes.historyActions?.[0]?.id, "verify-package");
-
-  const policyPlugin = BUILT_IN_PLUGIN_MANIFESTS.find((plugin) => plugin.id === STRICT_PIN_POLICY_PLUGIN_ID);
-  assert.ok(policyPlugin);
-  assert.equal(policyPlugin.category, "policy");
-  assert.deepEqual(policyPlugin.permissions, []);
-  assert.equal(policyPlugin.contributes.policyProfiles?.[0]?.id, "strict-pin");
-  assert.equal(policyPlugin.contributes.policyProfiles?.[0]?.minimumPinLength, 10);
-  assert.equal(policyPlugin.contributes.policyProfiles?.[0]?.minimumKdfIterations, 1_000_000);
+  assert.equal(
+    BUILT_IN_PLUGIN_MANIFESTS.some((plugin) => (RETIRED_PLUGIN_IDS as readonly string[]).includes(plugin.id)),
+    false
+  );
 
   const brandingPlugin = BUILT_IN_PLUGIN_MANIFESTS.find((plugin) => plugin.id === COMPANY_DEFAULT_BRANDING_PLUGIN_ID);
   assert.ok(brandingPlugin);
@@ -155,6 +147,48 @@ test("plugin manifest contract catches permission and naming drift", () => {
   ]);
 });
 
+test("plugin manifest contract blocks retired ids and core security replacements", () => {
+  const retiredAuditManifest: PluginManifest = {
+    id: "audit.integrity.report",
+    name: "Retired Audit",
+    version: "0.1.0",
+    description: "Attempts to restore a retired core capability as a plugin.",
+    category: "audit",
+    permissions: ["history:read"],
+    contributes: {
+      historyActions: [
+        {
+          id: "verify-package",
+          label: "Verify package",
+          description: "Verify saved package integrity."
+        }
+      ]
+    }
+  };
+
+  assert.deepEqual(getPluginManifestContractViolations(retiredAuditManifest), [
+    "audit.integrity.report: plugin id is retired because this capability is now core"
+  ]);
+
+  const coreReplacementManifest = {
+    id: "policy.viewer-replacement",
+    name: "Viewer Replacement",
+    version: "0.1.0",
+    description: "Attempts to replace core viewer behavior.",
+    category: "policy",
+    permissions: [],
+    coreReplacements: ["viewer-html", "pin"],
+    contributes: {
+      viewerHtml: true
+    }
+  } as unknown as PluginManifest;
+
+  assert.deepEqual(getPluginManifestContractViolations(coreReplacementManifest), [
+    "policy.viewer-replacement: core security surfaces are not replaceable by plugins",
+    "policy.viewer-replacement: contribution point viewerHtml is not supported"
+  ]);
+});
+
 test("template pack manifests can contribute static templates without network or secret permissions", () => {
   const templatePackManifest: PluginManifest = {
     id: "template-pack.legal",
@@ -191,8 +225,8 @@ test("policy manifests can contribute stricter publish profiles without permissi
           id: "required-metadata",
           label: "Required metadata",
           description: "Requires recipient and document number.",
-          minimumPinLength: 8,
-          minimumKdfIterations: 600_000,
+          minimumPinLength: 12,
+          minimumKdfIterations: 1_200_000,
           requiredMetadata: ["recipientName", "documentNumber"],
           requireWatermark: true
         }
@@ -290,7 +324,7 @@ test("policy manifest contract blocks weaker or unsupported profile requirements
 
   assert.deepEqual(getPluginManifestContractViolations(weakPolicyManifest), [
     "policy.weak: policy profile weak-policy minimumPinLength must be between 6 and 15",
-    "policy.weak: policy profile weak-policy minimumKdfIterations must be at least 600000",
+    "policy.weak: policy profile weak-policy minimumKdfIterations must be at least 1000000",
     "policy.weak: policy profile weak-policy requiredMetadata field issuer is not supported"
   ]);
 });
@@ -317,18 +351,6 @@ test("plugin descriptors and contributions are driven only by enabled state", ()
   assert.equal(genericContributions.publishActions[0].pluginId, GENERIC_SMTP_PLUGIN_ID);
   assert.equal(genericContributions.historyActions.length, 1);
   assert.equal(genericContributions.historyActions[0].pluginId, GENERIC_SMTP_PLUGIN_ID);
-
-  const auditContributions = getEnabledPluginContributions(["audit.integrity.report"]);
-  assert.equal(auditContributions.publishActions.length, 0);
-  assert.equal(auditContributions.historyActions.length, 1);
-  assert.equal(auditContributions.historyActions[0].pluginId, "audit.integrity.report");
-  assert.equal(auditContributions.historyActions[0].id, "verify-package");
-
-  const policyContributions = getEnabledPluginContributions([STRICT_PIN_POLICY_PLUGIN_ID]);
-  assert.equal(policyContributions.publishActions.length, 0);
-  assert.equal(policyContributions.policyProfiles.length, 1);
-  assert.equal(policyContributions.policyProfiles[0].pluginId, STRICT_PIN_POLICY_PLUGIN_ID);
-  assert.equal(policyContributions.policyProfiles[0].minimumPinLength, 10);
 
   const brandingContributions = getEnabledPluginContributions([COMPANY_DEFAULT_BRANDING_PLUGIN_ID]);
   assert.equal(brandingContributions.publishActions.length, 0);

@@ -2,7 +2,6 @@ export const PIN_MIN_LENGTH = 6;
 export const PIN_MAX_LENGTH = 15;
 export const GENERATED_PIN_LENGTH = 12;
 export const DEFAULT_PIN_KDF_ITERATIONS = 1_000_000;
-export const COMPAT_PIN_KDF_ITERATIONS = 600_000;
 
 const GENERATED_PIN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%*-_=+?";
 const GENERATED_PIN_BUCKET_SIZE = Math.floor(256 / GENERATED_PIN_ALPHABET.length) * GENERATED_PIN_ALPHABET.length;
@@ -77,8 +76,8 @@ export function evaluatePinPolicy(input: string, options: PinPolicyOptions = {})
   };
 }
 
-export function assertValidPin(input: string): string {
-  const result = evaluatePinPolicy(input);
+export function assertValidPin(input: string, options: PinPolicyOptions = {}): string {
+  const result = evaluatePinPolicy(input, options);
   if (!result.valid) {
     throw new Error(result.message);
   }
@@ -90,7 +89,7 @@ export function generatePin(source: PinRandomSource = globalThis.crypto, length 
     throw new Error("A cryptographically secure random source is required.");
   }
   if (!Number.isInteger(length) || length < PIN_MIN_LENGTH || length > PIN_MAX_LENGTH) {
-    throw new Error("Generated PIN length must be between 6 and 15 characters.");
+    throw new Error(`Generated PIN length must be between ${PIN_MIN_LENGTH} and ${PIN_MAX_LENGTH} characters.`);
   }
 
   const random = new Uint8Array(length);
