@@ -4,7 +4,7 @@
 - Admin 발행도구는 Electron + React/TypeScript 단일 코드베이스로 구현하고, 배포물은 macOS용 / Windows용 개별 설치 파일로 제공한다.
 - 문서 열람 암호는 패스프레이즈나 긴 코드가 아니라 6자리 이상 15자리 이내 PIN으로 제한한다.
 - 암호화 구조는 `PIN -> PBKDF2 -> KEK`, `DEK -> 본문 AES-256-GCM 암호화`, `KEK -> DEK wrapping`을 사용한다.
-- 짧은 PIN은 오프라인 대입 공격에 취약하므로 MVP 기본 KDF 비용은 PBKDF2-HMAC-SHA-256 1,000,000 iterations로 상향하고, 저사양 호환용으로 600,000 선택지를 둔다.
+- 짧은 PIN은 오프라인 대입 공격에 취약하므로 기본 KDF 비용은 PBKDF2-HMAC-SHA-256 1,000,000 iterations로 고정한다.
 
 ## Key Changes
 - Admin 앱은 macOS Apple Silicon/Intel universal DMG와 Windows x64 NSIS 설치 파일로 각각 빌드한다.

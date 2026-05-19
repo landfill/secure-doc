@@ -70,8 +70,8 @@ export interface SecureDocPackage {
     helpText: "별도 안내받은 6자리 이상 15자리 이내 PIN을 입력하세요.";
     keyPolicy: {
       type: "pin-code";
-      minLength: typeof PIN_MIN_LENGTH;
-      maxLength: typeof PIN_MAX_LENGTH;
+      minLength: number;
+      maxLength: number;
       normalization: "nfkc-trim";
       allowedCharacters: "printable";
     };
@@ -262,7 +262,10 @@ export async function issueSecureDocument(options: IssueSecureDocumentOptions): 
 export async function unlockSecureDocument(pinInput: string, securePackage: SecureDocPackage): Promise<SecureDocPlainContent> {
   try {
     const crypto = getCrypto();
-    const pin = assertValidPin(pinInput);
+    const pin = assertValidPin(pinInput, {
+      minLength: securePackage.ui.keyPolicy.minLength,
+      maxLength: securePackage.ui.keyPolicy.maxLength
+    });
     const aadBytes = buildAadBytes(securePackage.doc);
     const storedAad = base64UrlToBytes(securePackage.crypto.contentEncryption.aad);
 

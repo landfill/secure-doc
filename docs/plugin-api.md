@@ -9,7 +9,7 @@ Secure Doc Admin supports plugins as packaged, built-in extension points. The cu
 - The renderer never executes plugin implementation code.
 - Network, file, secret, and package access happens only in the Electron main process.
 - Plugin settings views must not return raw secrets.
-- Viewer HTML, encryption algorithms, PIN handling, and offline CSP are core security surfaces and are not replaceable by plugins.
+- Viewer HTML, encryption algorithms, PIN handling, DEK/KEK structure, offline CSP, and package integrity verification are core security surfaces and are not replaceable by plugins.
 
 External plugin loading, remote registries, and runtime JavaScript from plugin packages are outside the current scope.
 
@@ -31,7 +31,7 @@ The stable categories are:
 
 - `delivery`: sends or copies already-issued secure HTML packages.
 - `template`: contributes static document templates or safe template metadata.
-- `audit`: reads publish-history metadata and, when permitted, verifies package files.
+- `audit`: reads publish-history metadata for reporting or export without replacing core package integrity verification.
 - `branding`: contributes safe brand presets for metadata, watermark, or viewer presentation.
 - `policy`: contributes stricter publish-time validation presets.
 
@@ -43,7 +43,12 @@ Plugin ids must use lowercase dot/dash segments and match the category prefix:
 - `branding.*`
 - `policy.*`
 
-Examples: `delivery.smtp.gmail`, `delivery.smtp.generic`, `template-pack.legal`, `audit.export.csv`, `branding.company-defaults`, `policy.strict-pin`.
+Examples: `delivery.smtp.gmail`, `delivery.smtp.generic`, `template-pack.legal`, `audit.export.csv`, `branding.company-defaults`, `policy.extra-strict`.
+
+Retired ids are blocked by contract tests and must not be reused:
+
+- `audit.integrity.report`: package integrity verification is now a core history action.
+- `policy.strict-pin`: strict publish requirements are now the core default policy.
 
 ## Permissions
 
@@ -116,7 +121,7 @@ The renderer may add channel-specific fields such as recipient email and subject
 
 ### `historyActions`
 
-Declares actions available from publish history. The main process must resolve the selected history record, verify `documentId` and `outputPath`, read the package only when allowed, and compare file content with `packageSha256` before passing it to a delivery or audit action.
+Declares actions available from publish history. The main process must resolve the selected history record, verify `documentId` and `outputPath`, read the package only when allowed, and compare file content with `packageSha256` before passing it to a delivery or reporting action. Core package integrity verification itself is exposed through `window.secureDoc.verifyPackageIntegrity()` and is not a plugin action.
 
 ### `templates`
 
@@ -124,7 +129,7 @@ Declares static template ids. Base templates are shown without a plugin, while e
 
 ### `policyProfiles`
 
-Declares publish-time validation presets. Policy profiles can require a longer PIN, a minimum PBKDF2 iteration count, required metadata fields, or a watermark. A profile must not weaken the base security floor: `minimumPinLength` cannot be below the core PIN minimum, `minimumKdfIterations` cannot be below the compatibility KDF floor, and required metadata fields must come from the reviewed allowlist.
+Declares publish-time validation presets. The core policy always requires a 6-15 character PIN, PBKDF2 at 1,000,000 iterations or higher, recipient/document number/display expiry metadata, and a watermark. Policy profiles can only add stronger requirements. A profile must not weaken the base security floor: `minimumPinLength` cannot be below 6, `minimumKdfIterations` cannot be below 1,000,000, and required metadata fields must come from the reviewed allowlist.
 
 The renderer applies enabled policy profiles before issuing a package. Policy failures must be specific enough for the operator to fix the form, but must not include PINs, PIN hashes, plaintext bodies, DEKs, or KEKs.
 
@@ -156,6 +161,8 @@ window.secureDoc.plugins.runAction(pluginId, actionId, payload);
 
 Main-process handlers must validate `pluginId`, `actionId`, and payload shape. Unsupported plugin ids or action ids must fail closed. Plugin action errors should be mapped to safe user messages that do not include credentials, PINs, document bodies, package contents, or cryptographic material.
 
+Top-level core APIs that enforce security boundaries, such as `window.secureDoc.verifyPackageIntegrity()`, must not be routed through plugin enablement or plugin actions.
+
 ## Adding a Contribution Type
 
 When adding a new contribution type, update these surfaces together:
@@ -178,6 +185,9 @@ The registry contract tests must fail when:
 - A contribution lacks its required permission.
 - A plugin duplicates contribution ids within one contribution point.
 - A contribution id uses uppercase, whitespace, or unsupported characters.
+- A retired plugin id such as `audit.integrity.report` or `policy.strict-pin` is reintroduced.
+- A manifest declares a replacement for core crypto, PIN handling, DEK/KEK, viewer HTML, viewer CSP, or package integrity behavior.
+- A manifest declares an unsupported contribution point.
 - A policy profile tries to lower the PIN or KDF floor.
 - A policy profile references unsupported metadata fields.
 

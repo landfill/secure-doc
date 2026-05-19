@@ -1,10 +1,9 @@
 import {
-  COMPAT_PIN_KDF_ITERATIONS,
-  DEFAULT_PIN_KDF_ITERATIONS,
-  PIN_MAX_LENGTH,
-  PIN_MIN_LENGTH
+  PIN_MAX_LENGTH
 } from "./pinPolicy.ts";
 import {
+  CORE_PUBLISH_POLICY_MINIMUM_KDF_ITERATIONS,
+  CORE_PUBLISH_POLICY_MINIMUM_PIN_LENGTH,
   PUBLISH_POLICY_METADATA_FIELDS,
   type PublishPolicyMetadataField
 } from "./publishPolicy.ts";
@@ -85,6 +84,17 @@ export const PLUGIN_ID_PREFIXES_BY_CATEGORY = {
   policy: ["policy."]
 } as const satisfies Record<PluginCategory, readonly string[]>;
 
+export const RETIRED_PLUGIN_IDS = ["audit.integrity.report", "policy.strict-pin"] as const;
+
+export const CORE_SECURITY_SURFACES = [
+  "crypto",
+  "pin",
+  "dek-kek",
+  "viewer-html",
+  "viewer-csp",
+  "package-integrity"
+] as const;
+
 export interface PluginManifest {
   id: string;
   name: string;
@@ -137,10 +147,6 @@ export const GENERIC_SMTP_HISTORY_SEND_ACTION_ID = "send-email-from-history";
 export const GENERIC_SMTP_TEST_ACTION_ID = "test-smtp";
 export const SMTP_DELIVERY_PLUGIN_IDS = [GMAIL_SMTP_PLUGIN_ID, GENERIC_SMTP_PLUGIN_ID] as const;
 export type SmtpDeliveryPluginId = (typeof SMTP_DELIVERY_PLUGIN_IDS)[number];
-export const AUDIT_INTEGRITY_PLUGIN_ID = "audit.integrity.report";
-export const AUDIT_INTEGRITY_HISTORY_ACTION_ID = "verify-package";
-export const STRICT_PIN_POLICY_PLUGIN_ID = "policy.strict-pin";
-export const STRICT_PIN_POLICY_PROFILE_ID = "strict-pin";
 export const BUSINESS_TEMPLATE_PACK_PLUGIN_ID = "template-pack.business-samples";
 export const COMPANY_DEFAULT_BRANDING_PLUGIN_ID = "branding.company-defaults";
 export const COMPANY_DEFAULT_BRANDING_PRESET_ID = "company-defaults";
@@ -247,24 +253,6 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
     }
   },
   {
-    id: AUDIT_INTEGRITY_PLUGIN_ID,
-    name: "패키지 무결성 감사",
-    version: "0.1.0",
-    description:
-      "저장된 보안 HTML 파일이 발행 당시 기록된 SHA-256 해시와 일치하는지 검사합니다. 활성화하면 발행 이력에서 정상/파일 없음/변조 의심 리포트를 볼 수 있습니다.",
-    category: "audit",
-    permissions: ["history:read", "package:read"],
-    contributes: {
-      historyActions: [
-        {
-          id: AUDIT_INTEGRITY_HISTORY_ACTION_ID,
-          label: "무결성 검증",
-          description: "발행 이력의 SHA-256 해시와 현재 저장된 HTML 파일을 비교해 변조 여부를 확인합니다."
-        }
-      ]
-    }
-  },
-  {
     id: COMPANY_DEFAULT_BRANDING_PLUGIN_ID,
     name: "조직 기본 브랜딩",
     version: "0.1.0",
@@ -293,28 +281,6 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
         }
       ]
     }
-  },
-  {
-    id: STRICT_PIN_POLICY_PLUGIN_ID,
-    name: "엄격 발행 정책",
-    version: "0.1.0",
-    description:
-      "문서 발행 전 더 긴 PIN, 기본 PBKDF2 반복 횟수, 수신자/문서번호/만료일/워터마크 필수 입력을 적용합니다. 활성화하면 발행 다이얼로그에서 정책 위반 항목을 안내합니다.",
-    category: "policy",
-    permissions: [],
-    contributes: {
-      policyProfiles: [
-        {
-          id: STRICT_PIN_POLICY_PROFILE_ID,
-          label: "엄격 발행 정책",
-          description: "PIN 10자리 이상, PBKDF2 1,000,000회 이상, 수신자/문서번호/만료일/워터마크 입력을 요구합니다.",
-          minimumPinLength: 10,
-          minimumKdfIterations: DEFAULT_PIN_KDF_ITERATIONS,
-          requiredMetadata: ["recipientName", "documentNumber", "displayExpiresAt"],
-          requireWatermark: true
-        }
-      ]
-    }
   }
 ];
 
@@ -339,6 +305,17 @@ function findDuplicateIds(items: readonly { id: string }[]): string[] {
 export function getPluginManifestContractViolations(manifest: PluginManifest): string[] {
   const violations: string[] = [];
   const idPattern = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
+  const manifestRecord = manifest as unknown as Record<string, unknown>;
+
+  if ((RETIRED_PLUGIN_IDS as readonly string[]).includes(manifest.id)) {
+    violations.push(`${manifest.id}: plugin id is retired because this capability is now core`);
+  }
+
+  const coreReplacements =
+    manifestRecord.coreReplacements ?? manifestRecord.replacesCoreSecuritySurfaces ?? manifestRecord.replacesCore;
+  if (coreReplacements !== undefined) {
+    violations.push(`${manifest.id}: core security surfaces are not replaceable by plugins`);
+  }
 
   if (!idPattern.test(manifest.id)) {
     violations.push(`${manifest.id}: plugin id must use lowercase dot/dash segments`);
@@ -346,6 +323,13 @@ export function getPluginManifestContractViolations(manifest: PluginManifest): s
 
   if (!PLUGIN_ID_PREFIXES_BY_CATEGORY[manifest.category].some((prefix) => manifest.id.startsWith(prefix))) {
     violations.push(`${manifest.id}: plugin id must match the ${manifest.category} category prefix`);
+  }
+
+  const supportedContributionPoints = new Set(Object.keys(PLUGIN_CONTRIBUTION_PERMISSION_REQUIREMENTS));
+  for (const contributionPoint of Object.keys(manifest.contributes)) {
+    if (!supportedContributionPoints.has(contributionPoint)) {
+      violations.push(`${manifest.id}: contribution point ${contributionPoint} is not supported`);
+    }
   }
 
   const permissions = new Set(manifest.permissions);
@@ -379,19 +363,21 @@ export function getPluginManifestContractViolations(manifest: PluginManifest): s
     if (
       policyProfile.minimumPinLength !== undefined &&
       (!Number.isInteger(policyProfile.minimumPinLength) ||
-        policyProfile.minimumPinLength < PIN_MIN_LENGTH ||
+        policyProfile.minimumPinLength < CORE_PUBLISH_POLICY_MINIMUM_PIN_LENGTH ||
         policyProfile.minimumPinLength > PIN_MAX_LENGTH)
     ) {
-      violations.push(`${manifest.id}: policy profile ${policyProfile.id} minimumPinLength must be between ${PIN_MIN_LENGTH} and ${PIN_MAX_LENGTH}`);
+      violations.push(
+        `${manifest.id}: policy profile ${policyProfile.id} minimumPinLength must be between ${CORE_PUBLISH_POLICY_MINIMUM_PIN_LENGTH} and ${PIN_MAX_LENGTH}`
+      );
     }
 
     if (
       policyProfile.minimumKdfIterations !== undefined &&
       (!Number.isInteger(policyProfile.minimumKdfIterations) ||
-        policyProfile.minimumKdfIterations < COMPAT_PIN_KDF_ITERATIONS)
+        policyProfile.minimumKdfIterations < CORE_PUBLISH_POLICY_MINIMUM_KDF_ITERATIONS)
     ) {
       violations.push(
-        `${manifest.id}: policy profile ${policyProfile.id} minimumKdfIterations must be at least ${COMPAT_PIN_KDF_ITERATIONS}`
+        `${manifest.id}: policy profile ${policyProfile.id} minimumKdfIterations must be at least ${CORE_PUBLISH_POLICY_MINIMUM_KDF_ITERATIONS}`
       );
     }
 

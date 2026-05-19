@@ -1,9 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createAuditPluginService } from "../src/main/auditPlugin.ts";
+import { createPackageIntegrityAuditService } from "../src/main/packageIntegrityAudit.ts";
 import { sha256Base64Url } from "../src/main/packageIntegrity.ts";
-import type { AuditPackageIntegrityReport, PublishHistoryRecord } from "../src/shared/desktopApi.ts";
-import { AUDIT_INTEGRITY_HISTORY_ACTION_ID, AUDIT_INTEGRITY_PLUGIN_ID } from "../src/shared/plugins.ts";
+import type { PackageIntegrityReport, PublishHistoryRecord } from "../src/shared/desktopApi.ts";
 
 function buildHistoryRecord(overrides: Partial<PublishHistoryRecord> = {}): PublishHistoryRecord {
   return {
@@ -23,23 +22,20 @@ function buildHistoryRecord(overrides: Partial<PublishHistoryRecord> = {}): Publ
   };
 }
 
-test("audit integrity action reports a verified saved package without exposing contents", async () => {
+test("core package integrity audit reports a verified saved package without exposing contents", async () => {
   const record = buildHistoryRecord();
-  const service = createAuditPluginService({
-    isPluginEnabled: async () => true,
+  const service = createPackageIntegrityAuditService({
     listHistory: async () => [record],
     readPackageFile: async () => "<!doctype html><title>Issued package</title>",
     now: () => new Date("2026-05-17T10:00:00.000Z")
   });
 
-  const report = await service.runAction(AUDIT_INTEGRITY_PLUGIN_ID, AUDIT_INTEGRITY_HISTORY_ACTION_ID, {
+  const report = await service.verifyPackageIntegrity({
     documentId: record.documentId,
     outputPath: record.outputPath
   });
 
   assert.deepEqual(report, {
-    pluginId: AUDIT_INTEGRITY_PLUGIN_ID,
-    actionId: AUDIT_INTEGRITY_HISTORY_ACTION_ID,
     documentId: "doc-1",
     title: "Quarterly secure package",
     issuer: "Compliance",
@@ -57,36 +53,36 @@ test("audit integrity action reports a verified saved package without exposing c
     message: "저장된 보안 HTML 파일이 발행 이력과 일치합니다."
   });
   assert.equal(JSON.stringify(report).includes("Issued package"), false);
+  assert.equal("pluginId" in report, false);
+  assert.equal("actionId" in report, false);
 });
 
-test("audit integrity action reports missing and tampered packages safely", async () => {
+test("core package integrity audit reports missing and tampered packages safely", async () => {
   const record = buildHistoryRecord();
-  const missingService = createAuditPluginService({
-    isPluginEnabled: async () => true,
+  const missingService = createPackageIntegrityAuditService({
     listHistory: async () => [record],
     readPackageFile: async () => {
       throw new Error("ENOENT");
     },
     now: () => new Date("2026-05-17T10:00:00.000Z")
   });
-  const missingReport = (await missingService.runAction(AUDIT_INTEGRITY_PLUGIN_ID, AUDIT_INTEGRITY_HISTORY_ACTION_ID, {
+  const missingReport = (await missingService.verifyPackageIntegrity({
     documentId: record.documentId,
     outputPath: record.outputPath
-  })) as AuditPackageIntegrityReport;
+  })) as PackageIntegrityReport;
   assert.equal(missingReport.status, "missing");
   assert.equal(missingReport.message, "저장된 보안 HTML 파일을 찾을 수 없습니다.");
 
-  const tamperedService = createAuditPluginService({
-    isPluginEnabled: async () => true,
+  const tamperedService = createPackageIntegrityAuditService({
     listHistory: async () => [record],
     readPackageFile: async () =>
       "<!doctype html><body>Plain confidential body PIN 123456 PIN hash pinhash-abc DEK dek-secret KEK kek-secret</body>",
     now: () => new Date("2026-05-17T10:00:00.000Z")
   });
-  const tamperedReport = (await tamperedService.runAction(AUDIT_INTEGRITY_PLUGIN_ID, AUDIT_INTEGRITY_HISTORY_ACTION_ID, {
+  const tamperedReport = (await tamperedService.verifyPackageIntegrity({
     documentId: record.documentId,
     outputPath: record.outputPath
-  })) as AuditPackageIntegrityReport;
+  })) as PackageIntegrityReport;
   const serializedReport = JSON.stringify(tamperedReport);
 
   assert.equal(tamperedReport.status, "tampered");
@@ -98,34 +94,20 @@ test("audit integrity action reports missing and tampered packages safely", asyn
   assert.equal(serializedReport.includes("kek-secret"), false);
 });
 
-test("audit plugin rejects disabled or unknown action requests", async () => {
+test("core package integrity audit rejects invalid or unavailable history requests", async () => {
   const record = buildHistoryRecord();
-  const service = createAuditPluginService({
-    isPluginEnabled: async () => false,
+  const service = createPackageIntegrityAuditService({
     listHistory: async () => [record]
   });
 
   await assert.rejects(
     () =>
-      service.runAction(AUDIT_INTEGRITY_PLUGIN_ID, AUDIT_INTEGRITY_HISTORY_ACTION_ID, {
-        documentId: record.documentId,
-        outputPath: record.outputPath
-      }),
-    /비활성화/
-  );
-
-  const enabledService = createAuditPluginService({
-    isPluginEnabled: async () => true,
-    listHistory: async () => [record]
-  });
-
-  await assert.rejects(() => enabledService.runAction(AUDIT_INTEGRITY_PLUGIN_ID, "unknown-action"), /알 수 없는 플러그인 액션/);
-  await assert.rejects(
-    () =>
-      enabledService.runAction(AUDIT_INTEGRITY_PLUGIN_ID, AUDIT_INTEGRITY_HISTORY_ACTION_ID, {
+      service.verifyPackageIntegrity({
         documentId: "missing-doc",
         outputPath: record.outputPath
       }),
     /사용할 수 없습니다/
   );
+
+  await assert.rejects(() => service.verifyPackageIntegrity({ documentId: "", outputPath: "" }), /발행 이력 항목/);
 });
