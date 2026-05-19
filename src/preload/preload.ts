@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  AppInfo,
   AppPreferences,
   PackageIntegrityReport,
   PackageIntegrityRequest,
@@ -9,6 +10,9 @@ import type {
 } from "../shared/desktopApi";
 
 const api: SecureDocDesktopApi = {
+  getAppInfo(): Promise<AppInfo> {
+    return ipcRenderer.invoke("secure-doc:get-app-info");
+  },
   getPreferences(): Promise<AppPreferences> {
     return ipcRenderer.invoke("secure-doc:get-preferences");
   },
