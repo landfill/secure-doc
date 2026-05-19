@@ -17,6 +17,16 @@ This is an Electron + React/TypeScript secure document issuer. Main process code
 
 Use strict TypeScript and ES modules. Keep two-space indentation, double quotes, semicolons omitted, and named exports where practical. React components use `PascalCase`; functions, variables, and test helpers use `camelCase`; type aliases use `PascalCase`. Keep security-sensitive helpers in `src/shared/` so they can be tested outside Electron.
 
+## Engineering Discipline
+
+Think before coding. State assumptions when they affect scope, security, data handling, or UX. If a request has multiple plausible interpretations, name the options and tradeoffs instead of silently choosing. Push back when a simpler or safer path fits the goal better; ask only when the ambiguity would materially change the implementation.
+
+Prefer the simplest complete solution. Do not add speculative features, unused configuration, single-use abstractions, or error handling for impossible states. If the implementation grows noticeably larger than the behavior requires, simplify before handing it off.
+
+Make surgical changes. Every changed line should trace back to the user request or to cleanup caused by that change. Do not reformat, rename, refactor, or "improve" adjacent code unless it is required for the task. Match the surrounding style. If unrelated dead code or design debt is discovered, mention it in the handoff instead of deleting it.
+
+Use goal-driven verification. For bugs, reproduce the failure with a focused test or clear diagnostic before changing behavior when practical. For refactors, verify behavior before and after. For multi-step work, define success criteria and loop until the criteria are met or a concrete blocker remains.
+
 ## Testing Guidelines
 
 Use `node:test` and `node:assert/strict`. Name tests `*.test.ts` and place them in `tests/`. Add focused regression tests for PIN policy, packaging, viewer security, and static security constraints. Run `npm test` before submitting changes; run `npm run build` when TypeScript, Electron, or packaging behavior changes.
