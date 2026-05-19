@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell, type MenuItemConstructorOptions } from "electron";
 import { createVerifiedHistoryPackageReader } from "./deliveryPlugin";
 import { createHistoryStore } from "./history";
 import { createPackageIntegrityAuditService } from "./packageIntegrityAudit";
@@ -60,6 +60,7 @@ function createWindow(): void {
     minHeight: 720,
     title: "Secure Doc Admin",
     show: false,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, "../preload/preload.mjs"),
       contextIsolation: true,
@@ -78,6 +79,43 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
+}
+
+function configureApplicationMenu(): void {
+  const template: MenuItemConstructorOptions[] = [];
+
+  if (process.platform === "darwin") {
+    template.push({
+      label: app.name,
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" }
+      ]
+    });
+  }
+
+  template.push({
+    label: "Edit",
+    submenu: [
+      { role: "undo" },
+      { role: "redo" },
+      { type: "separator" },
+      { role: "cut" },
+      { role: "copy" },
+      { role: "paste" },
+      { role: "pasteAndMatchStyle" },
+      { role: "delete" },
+      { type: "separator" },
+      { role: "selectAll" }
+    ]
+  });
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 function safeSuggestedName(name: string): string {
@@ -244,7 +282,7 @@ ipcMain.handle("secure-doc:plugins:run-action", async (_event, pluginId: string,
 });
 
 app.whenReady().then(() => {
-  Menu.setApplicationMenu(null);
+  configureApplicationMenu();
   createWindow();
 
   app.on("activate", () => {

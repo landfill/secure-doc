@@ -1856,6 +1856,17 @@ select:focus,
       "issuer recipient number number date date"
       "watermark watermark . . . .";
   }
+
+  .template-picker,
+  .branding-picker {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.1fr);
+  }
+
+  .template-apply-button,
+  .branding-apply-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
 }
 
 @media (max-width: 900px) {

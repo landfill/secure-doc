@@ -38,7 +38,7 @@ async function main() {
     const page = await context.newPage();
     const filePath = path.resolve(__dirname, file);
     await page.goto(`file://${filePath}`, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(2000); // Wait for Google Fonts to load
+    await page.evaluate(() => document.fonts.ready);
 
     const grid = await page.$('.grid') || await page.$('.bento-container') || await page.$('body');
     const box = await grid.boundingBox();
