@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, translate, type Locale } from "./i18n.ts";
+
 export const PIN_MIN_LENGTH = 6;
 export const PIN_MAX_LENGTH = 15;
 export const GENERATED_PIN_LENGTH = 12;
@@ -14,6 +16,7 @@ export type PinPolicyResult =
 export interface PinPolicyOptions {
   minLength?: number;
   maxLength?: number;
+  locale?: Locale;
 }
 
 export interface PinRandomSource {
@@ -52,12 +55,13 @@ export function evaluatePinPolicy(input: string, options: PinPolicyOptions = {})
   const normalizedPin = normalizePin(input);
   const minLength = normalizePolicyLength(options.minLength, PIN_MIN_LENGTH);
   const maxLength = normalizePolicyLength(options.maxLength, PIN_MAX_LENGTH);
+  const locale = options.locale ?? DEFAULT_LOCALE;
 
   if (!hasValidLength(normalizedPin, minLength, maxLength) || CONTROL_CHARACTERS.test(normalizedPin)) {
     return {
       valid: false,
       normalizedPin,
-      message: `PIN은 숫자, 문자, 기호를 포함해 ${minLength}자리 이상 ${maxLength}자리 이내여야 합니다.`
+      message: translate(locale, "pin.error.length", { min: minLength, max: maxLength })
     };
   }
 
@@ -65,14 +69,14 @@ export function evaluatePinPolicy(input: string, options: PinPolicyOptions = {})
     return {
       valid: false,
       normalizedPin,
-      message: "반복 문자나 연속 숫자 PIN은 사용할 수 없습니다."
+      message: translate(locale, "pin.error.weak")
     };
   }
 
   return {
     valid: true,
     normalizedPin,
-    message: "PIN 정책을 충족합니다."
+    message: translate(locale, "pin.ok")
   };
 }
 

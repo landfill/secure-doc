@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  AppPreferences,
   PackageIntegrityReport,
   PackageIntegrityRequest,
   SavePackageRequest,
@@ -8,6 +9,12 @@ import type {
 } from "../shared/desktopApi";
 
 const api: SecureDocDesktopApi = {
+  getPreferences(): Promise<AppPreferences> {
+    return ipcRenderer.invoke("secure-doc:get-preferences");
+  },
+  savePreferences(preferences: AppPreferences): Promise<AppPreferences> {
+    return ipcRenderer.invoke("secure-doc:save-preferences", preferences);
+  },
   savePackage(request: SavePackageRequest): Promise<SavePackageResult> {
     return ipcRenderer.invoke("secure-doc:save-package", request);
   },

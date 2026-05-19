@@ -8,17 +8,20 @@ import { sha256Base64Url } from "./packageIntegrity";
 import { createPluginStore } from "./pluginStore";
 import { createSmtpDeliveryPluginService } from "./smtpPlugin";
 import type {
+  AppPreferences,
   PackageIntegrityReport,
   PackageIntegrityRequest,
   PublishHistoryRecord,
   SavePackageRequest,
   SavePackageResult
 } from "../shared/desktopApi";
+import { DEFAULT_LOCALE, resolveLocale, translate } from "../shared/i18n";
 import { isSmtpDeliveryPluginId, type PluginContributions, type PluginDescriptor } from "../shared/plugins";
 
 let mainWindow: BrowserWindow | null = null;
 const historyStorePromise = app.whenReady().then(() => createHistoryStore(app.getPath("userData")));
 const pluginStorePromise = app.whenReady().then(() => createPluginStore(app.getPath("userData")));
+const preferencesPathPromise = app.whenReady().then(() => join(app.getPath("userData"), "preferences.json"));
 const smtpPluginServicePromise = app.whenReady().then(() =>
   createSmtpDeliveryPluginService({
     userDataPath: app.getPath("userData"),
@@ -82,14 +85,47 @@ function safeSuggestedName(name: string): string {
   return trimmed.endsWith(".html") ? trimmed : `${trimmed || "secure-document"}.html`;
 }
 
+function normalizePreferences(value: unknown): AppPreferences {
+  const record = typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+  return {
+    language: resolveLocale(record.language)
+  };
+}
+
+async function readPreferences(): Promise<AppPreferences> {
+  try {
+    const preferencesPath = await preferencesPathPromise;
+    return normalizePreferences(JSON.parse(await readFile(preferencesPath, "utf8")));
+  } catch {
+    return {
+      language: DEFAULT_LOCALE
+    };
+  }
+}
+
+async function writePreferences(preferences: AppPreferences): Promise<AppPreferences> {
+  const nextPreferences = normalizePreferences(preferences);
+  const preferencesPath = await preferencesPathPromise;
+  await mkdir(dirname(preferencesPath), { recursive: true });
+  await writeFile(preferencesPath, `${JSON.stringify(nextPreferences, null, 2)}\n`, "utf8");
+  return nextPreferences;
+}
+
+ipcMain.handle("secure-doc:get-preferences", async (): Promise<AppPreferences> => readPreferences());
+
+ipcMain.handle("secure-doc:save-preferences", async (_event, preferences: AppPreferences): Promise<AppPreferences> => {
+  return writePreferences(preferences);
+});
+
 ipcMain.handle("secure-doc:save-package", async (_event, request: SavePackageRequest): Promise<SavePackageResult> => {
   if (!mainWindow) {
     throw new Error("Main window is not available.");
   }
 
+  const locale = resolveLocale(request.language);
   const defaultPath = safeSuggestedName(request.suggestedFileName);
   const result = await dialog.showSaveDialog(mainWindow, {
-    title: "암호화 HTML 문서 저장",
+    title: translate(locale, "main.saveDialogTitle"),
     defaultPath,
     filters: [
       {

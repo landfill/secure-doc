@@ -4,6 +4,7 @@ import {
   type PackageIntegrityRequest,
   type PublishHistoryRecord
 } from "../shared/desktopApi.ts";
+import { DEFAULT_LOCALE, resolveLocale, translate, type Locale } from "../shared/i18n.ts";
 import { assertPackageContentMatchesHash } from "./packageIntegrity.ts";
 
 export interface PackageIntegrityAuditServiceOptions {
@@ -22,19 +23,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizePackageIntegrityRequest(payload: unknown): PackageIntegrityRequest {
   if (!isRecord(payload)) {
-    throw new Error("감사 요청 정보가 필요합니다.");
+    throw new Error(translate(DEFAULT_LOCALE, "history.auditRequestRequired"));
   }
 
   const documentId = typeof payload.documentId === "string" ? payload.documentId.trim() : "";
   const outputPath = typeof payload.outputPath === "string" ? payload.outputPath.trim() : "";
+  const language = resolveLocale(payload.language);
 
   if (!documentId || !outputPath) {
-    throw new Error("발행 이력 항목이 필요합니다.");
+    throw new Error(translate(language, "history.auditHistoryItemRequired"));
   }
 
   return {
     documentId,
-    outputPath
+    outputPath,
+    language
   };
 }
 
@@ -75,22 +78,23 @@ export function createPackageIntegrityAuditService({
         (item) => item.documentId === request.documentId && item.outputPath === request.outputPath
       );
       if (!record) {
-        throw new Error("선택한 발행 이력 항목은 무결성 검증에 사용할 수 없습니다.");
+        throw new Error(translate(request.language ?? DEFAULT_LOCALE, "history.auditHistoryUnavailable"));
       }
 
+      const locale: Locale = request.language ?? DEFAULT_LOCALE;
       const checkedAt = now().toISOString();
       let packageHtml: string;
       try {
         packageHtml = await readPackageFile(record.outputPath);
       } catch {
-        return toReport(record, checkedAt, "missing", "저장된 보안 HTML 파일을 찾을 수 없습니다.");
+        return toReport(record, checkedAt, "missing", translate(locale, "history.auditFileMissing"));
       }
 
       try {
         assertPackageContentMatchesHash(packageHtml, record.packageSha256);
-        return toReport(record, checkedAt, "verified", "저장된 보안 HTML 파일이 발행 이력과 일치합니다.");
+        return toReport(record, checkedAt, "verified", translate(locale, "history.auditFileVerified"));
       } catch {
-        return toReport(record, checkedAt, "tampered", "저장된 보안 HTML 파일의 해시가 발행 이력과 다릅니다.");
+        return toReport(record, checkedAt, "tampered", translate(locale, "history.auditFileTampered"));
       }
     }
   };

@@ -22,8 +22,10 @@
 ```json
 {
   "ui": {
+    "language": "ko",
     "keyLabel": "문서 열람 PIN",
     "helpText": "별도 안내받은 6자리 이상 15자리 이내 PIN을 입력하세요.",
+    "unlockError": "PIN이 올바르지 않거나 문서가 손상되었습니다.",
     "keyPolicy": {
       "type": "pin-code",
       "minLength": 6,
@@ -34,6 +36,8 @@
   }
 }
 ```
+
+`language`는 오프라인 viewer 표시 언어이며 `ko` 또는 `en`만 허용한다. 기존 패키지처럼 값이 없거나 알 수 없는 값이면 한국어로 fallback한다. 이 UI 메타데이터에는 PIN, PIN hash, 평문 본문, DEK, KEK를 넣지 않는다.
 
 KDF 기본값은 PIN용 프로필로 고정한다.
 

@@ -94,6 +94,23 @@ test("core package integrity audit reports missing and tampered packages safely"
   assert.equal(serializedReport.includes("kek-secret"), false);
 });
 
+test("core package integrity audit localizes report messages when requested", async () => {
+  const record = buildHistoryRecord();
+  const service = createPackageIntegrityAuditService({
+    listHistory: async () => [record],
+    readPackageFile: async () => "<!doctype html><title>Issued package</title>"
+  });
+
+  const report = await service.verifyPackageIntegrity({
+    documentId: record.documentId,
+    outputPath: record.outputPath,
+    language: "en"
+  });
+
+  assert.equal(report.status, "verified");
+  assert.equal(report.message, "The saved secure HTML file matches publish history.");
+});
+
 test("core package integrity audit rejects invalid or unavailable history requests", async () => {
   const record = buildHistoryRecord();
   const service = createPackageIntegrityAuditService({
