@@ -1,6 +1,6 @@
 {
   "name": "secure-doc-admin",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "description": "Offline secure document issuer and viewer using WebCrypto and 6-15 character PINs",
   "author": "Secure Doc Team",
   "main": "out/main/main.js",

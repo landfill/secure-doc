@@ -5,6 +5,11 @@ export interface AppPreferences {
   language: Locale;
 }
 
+export interface AppInfo {
+  name: string;
+  version: string;
+}
+
 export interface PublishHistoryRecord {
   documentId: string;
   title: string;
@@ -117,6 +122,7 @@ export interface SecureDocPluginApi {
 }
 
 export interface SecureDocDesktopApi {
+  getAppInfo(): Promise<AppInfo>;
   getPreferences(): Promise<AppPreferences>;
   savePreferences(preferences: AppPreferences): Promise<AppPreferences>;
   savePackage(request: SavePackageRequest): Promise<SavePackageResult>;

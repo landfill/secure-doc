@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell } from "electron";
 import { createVerifiedHistoryPackageReader } from "./deliveryPlugin";
 import { createHistoryStore } from "./history";
 import { createPackageIntegrityAuditService } from "./packageIntegrityAudit";
@@ -110,6 +110,11 @@ async function writePreferences(preferences: AppPreferences): Promise<AppPrefere
   await writeFile(preferencesPath, `${JSON.stringify(nextPreferences, null, 2)}\n`, "utf8");
   return nextPreferences;
 }
+
+ipcMain.handle("secure-doc:get-app-info", async () => ({
+  name: "Secure Doc Admin",
+  version: app.getVersion()
+}));
 
 ipcMain.handle("secure-doc:get-preferences", async (): Promise<AppPreferences> => readPreferences());
 
@@ -239,6 +244,7 @@ ipcMain.handle("secure-doc:plugins:run-action", async (_event, pluginId: string,
 });
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
   createWindow();
 
   app.on("activate", () => {

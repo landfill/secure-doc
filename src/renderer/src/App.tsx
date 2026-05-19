@@ -3,6 +3,7 @@ import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type {
+  AppInfo,
   PackageIntegrityReport,
   PublishHistoryRecord,
   SaveSmtpSettingsRequest,
@@ -71,7 +72,7 @@ type EditorMode = "visual" | "html";
 type HeadingLevel = 1 | 2 | 3;
 type BlockStyle = "paragraph" | `heading-${HeadingLevel}`;
 type TextAlign = "left" | "center" | "right" | "justify";
-type NavTarget = "document" | "security" | "history" | "plugins";
+type NavTarget = "document" | "history" | "security" | "plugins" | "settings";
 const documentTypes = ["안내문", "계약서", "정책/규정", "기타", "보험증서", "고지서"] as const;
 type DocumentType = (typeof documentTypes)[number];
 
@@ -169,7 +170,11 @@ const defaultEmailSendForm: EmailSendForm = {
   attachmentFileName: ""
 };
 
-const navigationTargets: readonly NavTarget[] = ["document", "history", "security", "plugins"];
+const navigationTargets: readonly NavTarget[] = ["document", "history", "security", "plugins", "settings"];
+const fallbackAppInfo: AppInfo = {
+  name: "Secure Doc Admin",
+  version: "0.1.5"
+};
 
 const documentTypeTranslationKeys: Record<DocumentType, TranslationKey> = {
   "안내문": "template.category.notice",
@@ -480,6 +485,63 @@ function ToolbarButton({
   );
 }
 
+function NavIcon({ target }: { target: NavTarget }): ReactElement {
+  const commonProps = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    strokeWidth: 1.85
+  };
+
+  if (target === "document") {
+    return (
+      <svg className="nav-icon" aria-hidden="true" viewBox="0 0 24 24">
+        <path {...commonProps} d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v1" />
+        <path {...commonProps} d="M14 2v4a2 2 0 0 0 2 2h4" />
+        <rect {...commonProps} width="8" height="5" x="2" y="13" rx="1" />
+        <path {...commonProps} d="M8 13v-2a2 2 0 1 0-4 0v2" />
+      </svg>
+    );
+  }
+
+  if (target === "history") {
+    return (
+      <svg className="nav-icon" aria-hidden="true" viewBox="0 0 24 24">
+        <path {...commonProps} d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path {...commonProps} d="M3 3v5h5" />
+        <path {...commonProps} d="M12 7v5l4 2" />
+      </svg>
+    );
+  }
+
+  if (target === "security") {
+    return (
+      <svg className="nav-icon" aria-hidden="true" viewBox="0 0 24 24">
+        <path {...commonProps} d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+        <path {...commonProps} d="m9 12 2 2 4-4" />
+      </svg>
+    );
+  }
+
+  if (target === "plugins") {
+    return (
+      <svg className="nav-icon" aria-hidden="true" viewBox="0 0 24 24">
+        <path {...commonProps} d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="nav-icon" aria-hidden="true" viewBox="0 0 24 24">
+      <path {...commonProps} d="M14 17H5" />
+      <path {...commonProps} d="M19 7h-9" />
+      <circle {...commonProps} cx="17" cy="17" r="3" />
+      <circle {...commonProps} cx="7" cy="7" r="3" />
+    </svg>
+  );
+}
+
 function isDocumentType(value: string | undefined): value is DocumentType {
   return Boolean(value && (documentTypes as readonly string[]).includes(value));
 }
@@ -607,6 +669,7 @@ function normalizeLinkHref(value: string): string | null {
 }
 
 export function App(): ReactElement {
+  const [appInfo, setAppInfo] = useState<AppInfo>(fallbackAppInfo);
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
   const [viewerLocale, setViewerLocale] = useState<Locale>(DEFAULT_LOCALE);
   const [metadata, setMetadata] = useState<MetadataState>(defaultMetadata);
@@ -651,6 +714,7 @@ export function App(): ReactElement {
     () => navigationTargets.map((id) => ({ id, label: t(`nav.${id}` as TranslationKey) })),
     [locale]
   );
+  const activeNavigationItem = navigationItems.find((item) => item.id === activeNavTarget) ?? navigationItems[0];
 
   const activePolicyProfiles = pluginContributions.policyProfiles;
   const effectivePublishPolicy = useMemo(() => getEffectivePublishPolicy(activePolicyProfiles), [activePolicyProfiles]);
@@ -877,6 +941,7 @@ export function App(): ReactElement {
   }
 
   useEffect(() => {
+    window.secureDoc?.getAppInfo().then(setAppInfo).catch(() => setAppInfo(fallbackAppInfo));
     window.secureDoc?.getPreferences().then((preferences) => {
       const nextLocale = resolveLocale(preferences.language);
       setLocale(nextLocale);
@@ -1589,7 +1654,13 @@ export function App(): ReactElement {
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label={t("app.adminMenu")}>
-        <div className="brand">Secure Doc</div>
+        <div className="brand">
+          <span className="brand-copy">
+            <span className="brand-kicker">Secure Doc</span>
+            <span className="brand-title">Admin</span>
+            <span className="brand-subtitle">{t("app.sidebarSubtitle")}</span>
+          </span>
+        </div>
         <nav className="nav">
           {navigationItems.map((item) => (
             <button
@@ -1599,32 +1670,24 @@ export function App(): ReactElement {
               aria-current={activeNavTarget === item.id ? "page" : undefined}
               onClick={() => switchScreen(item)}
             >
-              {item.label}
+              <span className="nav-icon-wrap">
+                <NavIcon target={item.id} />
+              </span>
+              <span className="nav-label">{item.label}</span>
             </button>
           ))}
-          <span className="group-label">{t("nav.distributionTargets")}</span>
-          <span className="nav-note">macOS universal</span>
-          <span className="nav-note">Windows x64</span>
         </nav>
         <div className="sidebar-utility">
-          <label className="language-switcher">
-            {t("app.language")}
-            <select value={locale} onChange={(event) => handleLocaleChange(event.target.value)}>
-              {SUPPORTED_LOCALES.map((item) => (
-                <option key={item} value={item}>
-                  {translate(item, `locale.${item}` as TranslationKey)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <span className="sidebar-version-label">{t("settings.previewRelease")}</span>
+          <span className="sidebar-version">v{appInfo.version}</span>
         </div>
       </aside>
 
       <main className="main-column">
         <header className="topbar">
           <div>
-            <p className="eyebrow">WebCrypto Offline Secure Document</p>
-            <h1>Secure Doc Admin</h1>
+            <p className="eyebrow">{appInfo.name}</p>
+            <h1>{activeNavigationItem.label}</h1>
           </div>
           <div className="platforms" aria-label={t("app.statusLabel")}>
             <span>{t("app.offlineStatus")}</span>
@@ -2366,6 +2429,55 @@ export function App(): ReactElement {
               ))}
             </div>
           )}
+        </section>
+        )}
+
+        {activeNavTarget === "settings" && (
+        <section
+          className="panel settings-panel"
+          aria-labelledby="settings-heading"
+        >
+          <div className="section-heading">
+            <h2 id="settings-heading">{t("section.settings")}</h2>
+          </div>
+          <div className="settings-list">
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <strong>{t("settings.displayLanguage")}</strong>
+                <span>{t("settings.displayLanguageDescription")}</span>
+              </div>
+              <label className="settings-control">
+                <span className="sr-only">{t("settings.displayLanguage")}</span>
+                <select value={locale} onChange={(event) => handleLocaleChange(event.target.value)}>
+                  {SUPPORTED_LOCALES.map((item) => (
+                    <option key={item} value={item}>
+                      {translate(item, `locale.${item}` as TranslationKey)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <strong>{t("settings.appInfo")}</strong>
+                <span>{t("settings.appInfoDescription")}</span>
+              </div>
+              <dl className="settings-info-grid">
+                <div>
+                  <dt>{t("settings.product")}</dt>
+                  <dd>{appInfo.name}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.version")}</dt>
+                  <dd>v{appInfo.version}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.releaseChannel")}</dt>
+                  <dd>{t("settings.previewRelease")}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
         </section>
         )}
         </div>
