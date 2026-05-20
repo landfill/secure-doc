@@ -48,7 +48,8 @@
     "asar": true,
     "electronLanguages": [
       "ko",
-      "en"
+      "en",
+      "en-US"
     ],
     "mac": {
       "target": [
