@@ -46,6 +46,10 @@
       "package.json"
     ],
     "asar": true,
+    "electronLanguages": [
+      "ko",
+      "en"
+    ],
     "mac": {
       "target": [
         {
