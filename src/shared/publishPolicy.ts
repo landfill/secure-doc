@@ -68,10 +68,23 @@ export interface PublishPolicyEvaluationInput {
   locale?: Locale;
 }
 
+export interface PublishPrerequisiteEvaluationInput {
+  metadata: PublishPolicyMetadata;
+  contentText: string;
+  policyProfiles: readonly ResolvedPluginPolicyProfileContribution[];
+  locale?: Locale;
+}
+
 export interface PublishPolicyEvaluation {
   valid: boolean;
   messages: string[];
   pinMessage: string;
+  requirements: EffectivePublishPolicy;
+}
+
+export interface PublishPrerequisiteEvaluation {
+  valid: boolean;
+  messages: string[];
   requirements: EffectivePublishPolicy;
 }
 
@@ -103,6 +116,39 @@ export function getEffectivePublishPolicy(
     requiredMetadata: uniqueMetadataFields(requiredMetadata),
     requireWatermark: CORE_PUBLISH_POLICY_REQUIRE_WATERMARK,
     profileLabels: policyProfiles.map((profile) => profile.label)
+  };
+}
+
+export function evaluatePublishPrerequisites(input: PublishPrerequisiteEvaluationInput): PublishPrerequisiteEvaluation {
+  const requirements = getEffectivePublishPolicy(input.policyProfiles);
+  const locale = input.locale ?? DEFAULT_LOCALE;
+  const messages: string[] = [];
+
+  if (isBlank(input.metadata.title)) {
+    messages.push(translate(locale, "policy.error.titleRequired"));
+  }
+  if (isBlank(input.metadata.issuer)) {
+    messages.push(translate(locale, "policy.error.issuerRequired"));
+  }
+
+  for (const field of requirements.requiredMetadata) {
+    if (isBlank(input.metadata[field])) {
+      messages.push(translate(locale, `policy.error.${field}Required`));
+    }
+  }
+
+  if (requirements.requireWatermark && isBlank(input.metadata.watermarkText)) {
+    messages.push(translate(locale, "policy.error.watermarkRequired"));
+  }
+
+  if (!input.contentText.trim()) {
+    messages.push(translate(locale, "policy.error.contentRequired"));
+  }
+
+  return {
+    valid: messages.length === 0,
+    messages,
+    requirements
   };
 }
 

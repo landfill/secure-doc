@@ -52,6 +52,7 @@ import {
   PIN_MAX_LENGTH
 } from "../../shared/pinPolicy";
 import {
+  evaluatePublishPrerequisites,
   evaluatePublishPolicy,
   getEffectivePublishPolicy,
   publishPolicyMetadataFieldLabel
@@ -1333,6 +1334,19 @@ export function App(): ReactElement {
   }
 
   function openPublishDialog(): void {
+    const prerequisiteResult = evaluatePublishPrerequisites({
+      metadata,
+      contentText,
+      policyProfiles: activePolicyProfiles,
+      locale
+    });
+
+    if (!prerequisiteResult.valid) {
+      setError(prerequisiteResult.messages[0]);
+      setStatus("");
+      return;
+    }
+
     setPublishDialogOpen(true);
     setError("");
   }
