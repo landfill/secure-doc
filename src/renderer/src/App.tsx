@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
-import { Extension } from "@tiptap/core";
+import { Extension, Node as TiptapNode, mergeAttributes } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { NavIcon } from "./NavIcon";
@@ -441,6 +441,81 @@ const SecureDocTextAlign = Extension.create({
   }
 });
 
+function parseTableSpan(element: HTMLElement, attrName: "colspan" | "rowspan"): number | null {
+  const value = Number.parseInt(element.getAttribute(attrName) ?? "", 10);
+  return Number.isInteger(value) && value > 1 && value <= 12 ? value : null;
+}
+
+const tableSpanAttributes = {
+  colspan: {
+    default: null,
+    parseHTML: (element: HTMLElement) => parseTableSpan(element, "colspan"),
+    renderHTML: (attributes: { colspan?: number | null }) => (attributes.colspan ? { colspan: attributes.colspan } : {})
+  },
+  rowspan: {
+    default: null,
+    parseHTML: (element: HTMLElement) => parseTableSpan(element, "rowspan"),
+    renderHTML: (attributes: { rowspan?: number | null }) => (attributes.rowspan ? { rowspan: attributes.rowspan } : {})
+  }
+};
+
+const SecureDocTable = TiptapNode.create({
+  name: "secureDocTable",
+  group: "block",
+  content: "secureDocTableRow+",
+
+  parseHTML() {
+    return [{ tag: "table" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["table", mergeAttributes(HTMLAttributes), ["tbody", 0]];
+  }
+});
+
+const SecureDocTableRow = TiptapNode.create({
+  name: "secureDocTableRow",
+  content: "(secureDocTableHeader|secureDocTableCell)+",
+
+  parseHTML() {
+    return [{ tag: "tr" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["tr", mergeAttributes(HTMLAttributes), 0];
+  }
+});
+
+const SecureDocTableHeader = TiptapNode.create({
+  name: "secureDocTableHeader",
+  content: "block+",
+  isolating: true,
+  addAttributes: () => tableSpanAttributes,
+
+  parseHTML() {
+    return [{ tag: "th" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["th", mergeAttributes(HTMLAttributes), 0];
+  }
+});
+
+const SecureDocTableCell = TiptapNode.create({
+  name: "secureDocTableCell",
+  content: "block+",
+  isolating: true,
+  addAttributes: () => tableSpanAttributes,
+
+  parseHTML() {
+    return [{ tag: "td" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["td", mergeAttributes(HTMLAttributes), 0];
+  }
+});
+
 type ToolbarButtonProps = {
   label: string;
   title: string;
@@ -802,6 +877,10 @@ export function App(): ReactElement {
           isAllowedUri: (url) => isAllowedLinkHref(url)
         }
       }),
+      SecureDocTable,
+      SecureDocTableRow,
+      SecureDocTableHeader,
+      SecureDocTableCell,
       SecureDocTextAlign
     ],
     content: initialEditorHtml,

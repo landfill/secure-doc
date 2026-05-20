@@ -967,16 +967,42 @@ select:focus,
   background: var(--surface);
 }
 
+.rich-editor .tiptap table,
 .preview table,
 .history-table-wrap table {
   width: 100%;
   border-collapse: collapse;
 }
 
+.rich-editor .tiptap table,
+.preview table {
+  margin: 0 0 14px;
+  table-layout: fixed;
+}
+
+.rich-editor .tiptap th,
+.rich-editor .tiptap td,
 .preview th,
 .preview td {
   border: 1px solid var(--border-table);
   padding: 8px;
+  vertical-align: top;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.rich-editor .tiptap th,
+.preview th {
+  color: var(--fg);
+  background: var(--document-accent-soft, #edf4e3);
+  font-weight: 700;
+}
+
+.rich-editor .tiptap th p,
+.rich-editor .tiptap td p,
+.preview th p,
+.preview td p {
+  margin: 0;
 }
 
 .security-note {

@@ -242,7 +242,7 @@ export const BUILT_IN_PLUGIN_MANIFESTS: PluginManifest[] = [
         {
           id: "core.insurance-certificate",
           label: "보험증서",
-          description: "보험증서 형식의 보안 문서 템플릿입니다."
+          description: "가입확인서 표 구조를 반영한 보험증서 템플릿입니다."
         },
         {
           id: "core.billing-notice",

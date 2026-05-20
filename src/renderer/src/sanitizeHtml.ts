@@ -72,6 +72,11 @@ function isAllowedImageSrc(value: string): boolean {
   return /^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(trimmed) || /^blob:/i.test(trimmed);
 }
 
+function isAllowedTableSpan(value: string): boolean {
+  const span = Number.parseInt(value, 10);
+  return String(span) === value.trim() && span > 0 && span <= 12;
+}
+
 export function removeUnsupportedEditorCharacters(input: string): string {
   return input.normalize("NFKC").replace(UNSUPPORTED_EDITOR_CHARACTERS, "");
 }
@@ -115,6 +120,9 @@ function cleanNode(node: ParentNode): void {
         element.removeAttribute(attr.name);
       }
       if (attrName === "data-align" && !ALLOWED_ALIGNMENTS.has(attr.value)) {
+        element.removeAttribute(attr.name);
+      }
+      if ((attrName === "colspan" || attrName === "rowspan") && !isAllowedTableSpan(attr.value)) {
         element.removeAttribute(attr.name);
       }
     }
