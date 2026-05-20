@@ -282,6 +282,7 @@ npm run make:win
 ```
 
 패키징 결과는 `release/`에 생성됩니다. 운영 배포 전에는 macOS Developer ID 코드서명, notarization, Windows 코드서명 인증서, 앱 아이콘, 업데이트 배포 정책을 별도로 구성해야 합니다.
+패키징 시 Electron locale 리소스를 한국어와 기본 영어 locale로 제한해 macOS DMG와 Windows 설치 파일 생성 시간을 줄입니다.
 
 ## 보안 한계
 
