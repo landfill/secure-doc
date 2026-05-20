@@ -151,6 +151,34 @@ test("template body builders escape metadata, preserve user text, and avoid unsa
   assert.doesNotMatch(html, /<script|<iframe|<img|https?:\/\//i);
 });
 
+test("insurance certificate template renders confirmation-style tables safely", () => {
+  const template = getDocumentTemplateById("core.insurance-certificate");
+  assert.ok(template);
+
+  const html = buildDocumentTemplateBodyHtml(template, {
+    ...baseMetadata,
+    issuer: "발행<script>",
+    recipientName: "<b>피보험자</b>",
+    documentNumber: "POL-<2026>",
+    displayExpiresAt: "2026.01.01-2026.01.05"
+  });
+
+  assert.match(html, /단체보험 가입확인서/);
+  assert.match(html, /1\. 기본 정보/);
+  assert.match(html, /2\. 보험가입내용/);
+  assert.match(html, /3\. 확인 및 발행/);
+  assert.match(html, /<table>/);
+  assert.match(html, /<thead>/);
+  assert.match(html, /<tbody>/);
+  assert.match(html, /rowspan="2"/);
+  assert.match(html, /colspan="5"/);
+  assert.match(html, /프리미 해외여행보험 III/);
+  assert.match(html, /&lt;b&gt;피보험자&lt;\/b&gt;/);
+  assert.match(html, /POL-&lt;2026&gt;/);
+  assert.match(html, /발행&lt;script&gt;/);
+  assert.doesNotMatch(html, /<script|<iframe|https?:\/\//i);
+});
+
 test("core templates do not carry stored secrets or real sensitive examples", () => {
   const renderedTemplates = CORE_DOCUMENT_TEMPLATES.map((template) =>
     buildDocumentTemplateBodyHtml(template, applyDocumentTemplateDefaults(baseMetadata, template))

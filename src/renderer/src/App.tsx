@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
-import { Extension } from "@tiptap/core";
+import { Extension, Node as TiptapNode, mergeAttributes } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { NavIcon } from "./NavIcon";
@@ -44,6 +44,7 @@ import {
   type DocumentTemplateCategory,
   type DocumentTemplateMetadata
 } from "../../shared/documentTemplates";
+import { generatePresetDocumentNumber } from "../../shared/documentNumbers";
 import {
   DEFAULT_PIN_KDF_ITERATIONS,
   evaluatePinPolicy,
@@ -52,6 +53,7 @@ import {
   PIN_MAX_LENGTH
 } from "../../shared/pinPolicy";
 import {
+  evaluatePublishPrerequisites,
   evaluatePublishPolicy,
   getEffectivePublishPolicy,
   publishPolicyMetadataFieldLabel
@@ -441,6 +443,108 @@ const SecureDocTextAlign = Extension.create({
   }
 });
 
+function parseTableSpan(element: HTMLElement, attrName: "colspan" | "rowspan"): number | null {
+  const attrValue = element.getAttribute(attrName) ?? "";
+  const value = Number.parseInt(attrValue, 10);
+  return String(value) === attrValue.trim() && value > 1 && value <= 12 ? value : null;
+}
+
+const tableSpanAttributes = {
+  colspan: {
+    default: null,
+    parseHTML: (element: HTMLElement) => parseTableSpan(element, "colspan"),
+    renderHTML: (attributes: { colspan?: number | null }) => (attributes.colspan ? { colspan: attributes.colspan } : {})
+  },
+  rowspan: {
+    default: null,
+    parseHTML: (element: HTMLElement) => parseTableSpan(element, "rowspan"),
+    renderHTML: (attributes: { rowspan?: number | null }) => (attributes.rowspan ? { rowspan: attributes.rowspan } : {})
+  }
+};
+
+const SecureDocTable = TiptapNode.create({
+  name: "secureDocTable",
+  group: "block",
+  content: "secureDocTableHead? secureDocTableBody?",
+
+  parseHTML() {
+    return [{ tag: "table" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["table", mergeAttributes(HTMLAttributes), 0];
+  }
+});
+
+const SecureDocTableHead = TiptapNode.create({
+  name: "secureDocTableHead",
+  content: "secureDocTableRow+",
+
+  parseHTML() {
+    return [{ tag: "thead" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["thead", mergeAttributes(HTMLAttributes), 0];
+  }
+});
+
+const SecureDocTableBody = TiptapNode.create({
+  name: "secureDocTableBody",
+  content: "secureDocTableRow+",
+
+  parseHTML() {
+    return [{ tag: "tbody" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["tbody", mergeAttributes(HTMLAttributes), 0];
+  }
+});
+
+const SecureDocTableRow = TiptapNode.create({
+  name: "secureDocTableRow",
+  content: "(secureDocTableHeader|secureDocTableCell)+",
+
+  parseHTML() {
+    return [{ tag: "tr" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["tr", mergeAttributes(HTMLAttributes), 0];
+  }
+});
+
+const SecureDocTableHeader = TiptapNode.create({
+  name: "secureDocTableHeader",
+  content: "block+",
+  isolating: true,
+  addAttributes: () => tableSpanAttributes,
+
+  parseHTML() {
+    return [{ tag: "th" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["th", mergeAttributes(HTMLAttributes), 0];
+  }
+});
+
+const SecureDocTableCell = TiptapNode.create({
+  name: "secureDocTableCell",
+  content: "block+",
+  isolating: true,
+  addAttributes: () => tableSpanAttributes,
+
+  parseHTML() {
+    return [{ tag: "td" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["td", mergeAttributes(HTMLAttributes), 0];
+  }
+});
+
 type ToolbarButtonProps = {
   label: string;
   title: string;
@@ -505,7 +609,7 @@ const baseMetadata: MetadataState = {
   displayExpiresAt: "",
   watermarkText: "",
   recipientName: "",
-  documentNumber: "",
+  documentNumber: generatePresetDocumentNumber({ docType: "안내문" }),
   createdBy: "admin"
 };
 
@@ -802,6 +906,12 @@ export function App(): ReactElement {
           isAllowedUri: (url) => isAllowedLinkHref(url)
         }
       }),
+      SecureDocTable,
+      SecureDocTableHead,
+      SecureDocTableBody,
+      SecureDocTableRow,
+      SecureDocTableHeader,
+      SecureDocTableCell,
       SecureDocTextAlign
     ],
     content: initialEditorHtml,
@@ -1100,6 +1210,13 @@ export function App(): ReactElement {
     }
   }
 
+  function regenerateDocumentNumber(): void {
+    const nextDocumentNumber = generatePresetDocumentNumber({ docType: metadata.docType });
+    updateMetadata("documentNumber", nextDocumentNumber);
+    setStatus(t("document.number.generatedStatus", { number: nextDocumentNumber }));
+    setError("");
+  }
+
   function handleDocumentTypeChange(docType: DocumentType): void {
     updateMetadata("docType", docType);
 
@@ -1225,6 +1342,19 @@ export function App(): ReactElement {
   }
 
   function openPublishDialog(): void {
+    const prerequisiteResult = evaluatePublishPrerequisites({
+      metadata,
+      contentText,
+      policyProfiles: activePolicyProfiles,
+      locale
+    });
+
+    if (!prerequisiteResult.valid) {
+      setError(prerequisiteResult.messages[0]);
+      setStatus("");
+      return;
+    }
+
     setPublishDialogOpen(true);
     setError("");
   }
@@ -1689,10 +1819,25 @@ export function App(): ReactElement {
               {t("field.recipient")}
               <input value={metadata.recipientName} onChange={(event) => updateMetadata("recipientName", event.target.value)} />
             </label>
-            <label className="field-number">
-              {t("field.documentNumber")}
-              <input value={metadata.documentNumber} onChange={(event) => updateMetadata("documentNumber", event.target.value)} />
-            </label>
+            <div className="metadata-field field-number">
+              <label htmlFor="metadata-document-number">{t("field.documentNumber")}</label>
+              <div className="document-number-control">
+                <input
+                  id="metadata-document-number"
+                  value={metadata.documentNumber}
+                  onChange={(event) => updateMetadata("documentNumber", event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="document-number-button"
+                  title={t("document.number.generateTitle")}
+                  aria-label={t("document.number.generateTitle")}
+                  onClick={regenerateDocumentNumber}
+                >
+                  {t("document.number.generate")}
+                </button>
+              </div>
+            </div>
             <label className="field-date">
               {t("field.expiresAt")}
               <input

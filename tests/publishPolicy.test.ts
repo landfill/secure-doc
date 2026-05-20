@@ -4,6 +4,7 @@ import { DEFAULT_PIN_KDF_ITERATIONS } from "../src/shared/pinPolicy.ts";
 import {
   CORE_PUBLISH_POLICY_MINIMUM_KDF_ITERATIONS,
   CORE_PUBLISH_POLICY_MINIMUM_PIN_LENGTH,
+  evaluatePublishPrerequisites,
   evaluatePublishPolicy,
   getEffectivePublishPolicy
 } from "../src/shared/publishPolicy.ts";
@@ -85,6 +86,20 @@ test("publish policy blocks weak PIN, weak KDF, and missing required metadata", 
     "만료일을 입력하세요.",
     "워터마크 문구를 입력하세요."
   ]);
+});
+
+test("publish prerequisites block missing metadata before PIN collection", () => {
+  const result = evaluatePublishPrerequisites({
+    metadata: {
+      ...validMetadata,
+      documentNumber: ""
+    },
+    contentText: "본문",
+    policyProfiles: []
+  });
+
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.messages, ["문서번호를 입력하세요."]);
 });
 
 test("publish policy accepts valid documents without storing sensitive values", () => {

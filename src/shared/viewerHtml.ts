@@ -187,11 +187,24 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     .document-inner table {
       width: 100%;
       border-collapse: collapse;
+      margin: 0 0 14px;
+      table-layout: fixed;
     }
     .document-inner th, .document-inner td {
       border: 1px solid var(--border-table);
       padding: 8px 10px;
       text-align: left;
+      vertical-align: top;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    .document-inner th {
+      color: var(--fg);
+      background: var(--accent-soft);
+      font-weight: 700;
+    }
+    .document-inner th p, .document-inner td p {
+      margin: 0;
     }
     .document-inner img {
       max-width: 100%;
@@ -480,6 +493,12 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       return /^(https:|mailto:|tel:)/i.test(trimmed);
     }
 
+    function isSafeTableSpan(value) {
+      const normalized = String(value || "").trim();
+      const span = Number.parseInt(normalized, 10);
+      return String(span) === normalized && span > 0 && span <= 12;
+    }
+
     function removeUnsupportedEditorCharacters(value) {
       return String(value || "").normalize("NFKC").replace(/[\\p{Script=Han}\\uF900-\\uFAFF]/gu, "");
     }
@@ -514,6 +533,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
           if (attrName === "href" && !isSafeUrl(attr.value, false)) element.removeAttribute(attr.name);
           if (attrName === "src" && !isSafeUrl(attr.value, true)) element.removeAttribute(attr.name);
           if (attrName === "data-align" && !allowedAlignments.has(attr.value)) element.removeAttribute(attr.name);
+          if ((attrName === "colspan" || attrName === "rowspan") && !isSafeTableSpan(attr.value)) element.removeAttribute(attr.name);
         }
         clean(element);
       }

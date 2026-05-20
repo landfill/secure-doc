@@ -192,35 +192,173 @@ export const CORE_DOCUMENT_TEMPLATES: readonly DocumentTemplate[] = [
   {
     id: "core.insurance-certificate",
     name: "보험증서",
-    description: "보험증서 형식의 보안 문서 샘플입니다.",
+    description: "가입확인서 표 구조를 반영한 보험증서 샘플입니다.",
     category: "general",
     defaultMetadata: {
-      title: "디지털 안전 보장 보험증서",
-      description: "보험증서 형식의 보안 문서 샘플",
+      title: "단체보험 가입확인서",
+      description: "보험가입 확인용 증서 샘플",
       docType: "보험증서",
-      watermarkText: "CONFIDENTIAL"
+      watermarkText: "보험증서"
     },
     buildBodyHtml(metadata) {
-      const title = templateText(metadata.title, "디지털 안전 보장 보험증서");
-      const issuer = templateText(metadata.issuer, "보장 발행자");
-      const recipient = templateText(metadata.recipientName, "피보험자");
-      const documentNumber = templateText(metadata.documentNumber, "POL-2026-0001");
-      const expiresAt = templateText(metadata.displayExpiresAt, "별도 안내일까지");
+      const title = templateText(metadata.title, "단체보험 가입확인서");
+      const issuer = templateText(metadata.issuer, "샘플손해보험주식회사");
+      const recipient = templateText(metadata.recipientName, "홍길동");
+      const documentNumber = templateText(metadata.documentNumber, "120232072301");
+      const policyPeriod = templateText(metadata.displayExpiresAt, "2025.12.01-2025.12.05");
 
       return `<h1>${title}</h1>
-<p><strong>증권번호:</strong> ${documentNumber}</p>
-<p><strong>보험계약자:</strong> ${issuer}</p>
-<p><strong>피보험자:</strong> ${recipient}</p>
-<h2>제1조 [보장 목적]</h2>
-<p>본 증서는 ${recipient}에게 전달되는 디지털 문서의 열람 권한과 보장 범위를 명확히 하기 위해 발행한다.</p>
-<h2>제2조 [보장 내용]</h2>
-<ul>
-  <li>문서는 지정된 PIN으로만 열람할 수 있다.</li>
-  <li>발행자는 문서 발행 이력과 암호화 프로필을 보관한다.</li>
-  <li>만료 표시는 ${expiresAt} 기준으로 안내한다.</li>
-</ul>
-<h2>제3조 [유의 사항]</h2>
-<p>PIN 분실 또는 외부 유출 시 즉시 ${issuer}에게 재발행을 요청해야 한다.</p>`;
+<p><strong>${issuer}</strong></p>
+<hr>
+<h2>1. 기본 정보</h2>
+<table>
+  <tbody>
+    <tr>
+      <th>보험 상품명</th>
+      <td colspan="5">프리미 해외여행보험 III</td>
+    </tr>
+    <tr>
+      <th>증권번호</th>
+      <td colspan="5">${documentNumber}</td>
+    </tr>
+    <tr>
+      <th>보험목적</th>
+      <td colspan="5">관광</td>
+    </tr>
+    <tr>
+      <th>보험기간</th>
+      <td colspan="5">${policyPeriod}</td>
+    </tr>
+    <tr>
+      <th>보험계약자</th>
+      <td colspan="5">${issuer}</td>
+    </tr>
+    <tr>
+      <th rowspan="2">피보험자</th>
+      <th>성명</th>
+      <td colspan="4">${recipient}</td>
+    </tr>
+    <tr>
+      <th>생년월일</th>
+      <td>2002.01.01</td>
+      <th>성별</th>
+      <td colspan="2">남자</td>
+    </tr>
+    <tr>
+      <th>여행국가</th>
+      <td colspan="5">전세계</td>
+    </tr>
+  </tbody>
+</table>
+<h2>2. 보험가입내용</h2>
+<table>
+  <thead>
+    <tr>
+      <th>담보명</th>
+      <th>화폐코드</th>
+      <th>가입금액 (보상한도)</th>
+      <th>담보조건 (공제금액)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>상해사망후유장해</td>
+      <td>KRW</td>
+      <td>100,000,000</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>상해후유장해</td>
+      <td>KRW</td>
+      <td>-</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>해외발생상해의료비 (3개월이하)</td>
+      <td>KRW</td>
+      <td>5,000,000</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>해외발생질병의료비 (3개월이하)</td>
+      <td>KRW</td>
+      <td>5,000,000</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>상해급여의료비 (해외여행중 국내발생)</td>
+      <td>KRW</td>
+      <td>5,000,000</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>상해비급여의료비 (해외여행중 국내발생)</td>
+      <td>KRW</td>
+      <td>5,000,000</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>질병급여의료비 (해외여행중 국내발생)</td>
+      <td>KRW</td>
+      <td>5,000,000</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>질병비급여의료비 (해외여행중 국내발생)</td>
+      <td>KRW</td>
+      <td>5,000,000</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>3대비급여 의료비 (도수치료, 주사료, 자기공명진단)</td>
+      <td>KRW</td>
+      <td>3,500,000</td>
+      <td>담보명이 긴 경우 표 안에서 자동 줄바꿈됩니다.</td>
+    </tr>
+    <tr>
+      <td>질병사망 및 질병 80% 이상 고도후유장해</td>
+      <td>KRW</td>
+      <td>10,000,000</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>해외여행중 배상책임</td>
+      <td>KRW</td>
+      <td>1,000,000</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>해외여행중대사고구조송환비용 (14일이상)</td>
+      <td>KRW</td>
+      <td>1,000,000</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>해외여행중 휴대품손해 (분실제외)</td>
+      <td>KRW</td>
+      <td>실비</td>
+      <td>목적물당 1개 또는 1조, 1쌍 지급한도 20만원으로 가입금액 한도내 지급</td>
+    </tr>
+  </tbody>
+</table>
+<h2>3. 확인 및 발행</h2>
+<table>
+  <tbody>
+    <tr>
+      <th>안내</th>
+      <td>이 증서는 보험가입 확인용입니다. 만기환급금 및 해약환급금이 없습니다.</td>
+    </tr>
+    <tr>
+      <th>발행일</th>
+      <td>2025.11.20</td>
+    </tr>
+    <tr>
+      <th>담당자</th>
+      <td>${issuer} 여행보험 지급지원부</td>
+    </tr>
+  </tbody>
+</table>
+<p data-align="right"><strong>${issuer}</strong><br>대표이사 정 종 표</p>`;
     }
   },
   {

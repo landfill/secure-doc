@@ -11,7 +11,7 @@ Core templates live in `src/shared/documentTemplates.ts` and are available witho
 - `core.policy`: 정책/규정 문서
 - `core.general`: 일반 보안 문서
 
-The trusted registry also keeps plugin-pack structures such as insurance certificate and billing notice. They are not part of the default picker until an enabled template-pack plugin contributes their ids.
+The trusted registry also keeps plugin-pack structures such as insurance certificate and billing notice. The insurance certificate uses a confirmation-style table layout for basic policy information, coverage rows, and issuer confirmation. They are not part of the default picker until an enabled template-pack plugin contributes their ids.
 
 ## Data Contract
 
@@ -24,6 +24,8 @@ Each template has:
 - `buildBodyHtml(metadata)`: safe builder that escapes metadata before interpolation
 
 Template builders must not store PINs, PIN hashes, DEKs, KEKs, plaintext examples from real customers, remote URLs, or executable markup.
+
+Table-based templates are allowed to use static `table`, `thead`, `tbody`, `tr`, `th`, and `td` markup. The renderer and offline viewer preserve table structure and only allow bounded positive `colspan` and `rowspan` values.
 
 ## Renderer Flow
 
