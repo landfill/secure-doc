@@ -1,4 +1,6 @@
-const DOCUMENT_NUMBER_SUFFIX_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const DOCUMENT_NUMBER_SUFFIX_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const DOCUMENT_NUMBER_SUFFIX_DIGITS = "23456789";
+const DOCUMENT_NUMBER_SUFFIX_ALPHABET = `${DOCUMENT_NUMBER_SUFFIX_LETTERS}${DOCUMENT_NUMBER_SUFFIX_DIGITS}`;
 const DEFAULT_DOCUMENT_NUMBER_PREFIX = "DOC";
 const DEFAULT_DOCUMENT_NUMBER_SUFFIX_LENGTH = 4;
 
@@ -58,15 +60,41 @@ function defaultRandomBytes(length: number): Uint8Array {
   return fallbackRandomBytes(length);
 }
 
+function suffixHasLetter(value: string): boolean {
+  return [...value].some((char) => DOCUMENT_NUMBER_SUFFIX_LETTERS.includes(char));
+}
+
+function suffixHasDigit(value: string): boolean {
+  return [...value].some((char) => DOCUMENT_NUMBER_SUFFIX_DIGITS.includes(char));
+}
+
+function buildDocumentNumberSuffix(bytes: Uint8Array): string {
+  const chars = Array.from(bytes, (byte) => DOCUMENT_NUMBER_SUFFIX_ALPHABET[byte % DOCUMENT_NUMBER_SUFFIX_ALPHABET.length]);
+  const suffix = chars.join("");
+
+  if (suffixHasLetter(suffix) && suffixHasDigit(suffix)) {
+    return suffix;
+  }
+
+  const replacementIndex = bytes[0] % chars.length;
+  const replacementByte = bytes[replacementIndex];
+
+  chars[replacementIndex] = suffixHasLetter(suffix)
+    ? DOCUMENT_NUMBER_SUFFIX_DIGITS[replacementByte % DOCUMENT_NUMBER_SUFFIX_DIGITS.length]
+    : DOCUMENT_NUMBER_SUFFIX_LETTERS[replacementByte % DOCUMENT_NUMBER_SUFFIX_LETTERS.length];
+
+  return chars.join("");
+}
+
 export function documentNumberPrefixForType(docType: string | undefined): string {
   return documentTypePrefixes[docType ?? ""] ?? DEFAULT_DOCUMENT_NUMBER_PREFIX;
 }
 
 export function generatePresetDocumentNumber(options: GeneratePresetDocumentNumberOptions = {}): string {
-  const suffixLength = Math.max(1, options.suffixLength ?? DEFAULT_DOCUMENT_NUMBER_SUFFIX_LENGTH);
+  const suffixLength = Math.max(2, options.suffixLength ?? DEFAULT_DOCUMENT_NUMBER_SUFFIX_LENGTH);
   const randomBytes = options.randomBytes ?? defaultRandomBytes;
   const bytes = randomBytes(suffixLength);
-  const suffix = Array.from(bytes, (byte) => DOCUMENT_NUMBER_SUFFIX_ALPHABET[byte % DOCUMENT_NUMBER_SUFFIX_ALPHABET.length]).join("");
+  const suffix = buildDocumentNumberSuffix(bytes);
   const prefix = normalizePrefix(options.prefix ?? documentNumberPrefixForType(options.docType));
   const date = formatDocumentNumberDate(options.date ?? new Date());
 
