@@ -1,5 +1,11 @@
 # Secure Doc Admin
 
+[![Open Source](https://img.shields.io/badge/open%20source-100%25-2ea44f?style=for-the-badge)](https://github.com/landfill/secure-doc)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
+[![Offline First](https://img.shields.io/badge/offline--first-single%20HTML-0f172a?style=for-the-badge)](#보안-모델)
+[![Security Model](https://img.shields.io/badge/security%20model-documented-2563eb?style=for-the-badge)](#보안-모델)
+[![Plugins](https://img.shields.io/badge/plugins-allowlisted-f97316?style=for-the-badge)](#내장-플러그인)
+
 Secure Doc Admin은 Electron + React/TypeScript 기반의 오프라인 보안 문서 발행 도구입니다. 관리자는 문서를 작성한 뒤 PIN으로 보호된 단일 HTML 패키지를 발행하고, 수신자는 별도로 전달받은 PIN으로 브라우저에서 문서를 열람합니다.
 
 ## 주요 기능
@@ -321,3 +327,9 @@ README 본문에는 보안 설계를 정확하게 표현하기 위해 표준 용
 - [docs/plugin-api.md](docs/plugin-api.md): 플러그인 manifest, 권한, 기여 지점 계약
 - [docs/document-templates.md](docs/document-templates.md): 문서 템플릿 registry와 template-pack 흐름
 - [docs/publish-policy-plugins.md](docs/publish-policy-plugins.md): 발행 정책 플러그인 동작
+
+## 라이선스 정책
+
+이 프로젝트는 MIT License로 공개됩니다. 사용, 복제, 수정, 병합, 게시, 배포, 서브라이선스, 판매를 허용하며, 배포 시 저작권 고지와 라이선스 고지를 함께 포함해야 합니다.
+
+자세한 조건은 [LICENSE](LICENSE)를 참고하세요.
