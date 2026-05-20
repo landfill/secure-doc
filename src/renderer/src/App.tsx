@@ -44,6 +44,7 @@ import {
   type DocumentTemplateCategory,
   type DocumentTemplateMetadata
 } from "../../shared/documentTemplates";
+import { generatePresetDocumentNumber } from "../../shared/documentNumbers";
 import {
   DEFAULT_PIN_KDF_ITERATIONS,
   evaluatePinPolicy,
@@ -608,7 +609,7 @@ const baseMetadata: MetadataState = {
   displayExpiresAt: "",
   watermarkText: "",
   recipientName: "",
-  documentNumber: "",
+  documentNumber: generatePresetDocumentNumber({ docType: "안내문" }),
   createdBy: "admin"
 };
 
@@ -1207,6 +1208,13 @@ export function App(): ReactElement {
     if (syncPresetWithMetadata && presetBodyMetadataKeys.has(key)) {
       replaceEditorHtml(buildTemplateHtml(activeTemplate, nextMetadata));
     }
+  }
+
+  function regenerateDocumentNumber(): void {
+    const nextDocumentNumber = generatePresetDocumentNumber({ docType: metadata.docType });
+    updateMetadata("documentNumber", nextDocumentNumber);
+    setStatus(t("document.number.generatedStatus", { number: nextDocumentNumber }));
+    setError("");
   }
 
   function handleDocumentTypeChange(docType: DocumentType): void {
@@ -1811,10 +1819,25 @@ export function App(): ReactElement {
               {t("field.recipient")}
               <input value={metadata.recipientName} onChange={(event) => updateMetadata("recipientName", event.target.value)} />
             </label>
-            <label className="field-number">
-              {t("field.documentNumber")}
-              <input value={metadata.documentNumber} onChange={(event) => updateMetadata("documentNumber", event.target.value)} />
-            </label>
+            <div className="metadata-field field-number">
+              <label htmlFor="metadata-document-number">{t("field.documentNumber")}</label>
+              <div className="document-number-control">
+                <input
+                  id="metadata-document-number"
+                  value={metadata.documentNumber}
+                  onChange={(event) => updateMetadata("documentNumber", event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="document-number-button"
+                  title={t("document.number.generateTitle")}
+                  aria-label={t("document.number.generateTitle")}
+                  onClick={regenerateDocumentNumber}
+                >
+                  {t("document.number.generate")}
+                </button>
+              </div>
+            </div>
             <label className="field-date">
               {t("field.expiresAt")}
               <input

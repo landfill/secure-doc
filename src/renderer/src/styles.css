@@ -349,7 +349,8 @@ button.primary {
     "issuer issuer recipient recipient number number date date watermark watermark . .";
 }
 
-.metadata-panel label {
+.metadata-panel label,
+.metadata-panel .metadata-field {
   gap: 6px;
 }
 
@@ -364,6 +365,18 @@ label {
   color: var(--fg);
   font-size: 12px;
   font-weight: 600;
+}
+
+.metadata-field {
+  display: grid;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.metadata-field > label {
+  display: block;
+  gap: 0;
 }
 
 label.wide {
@@ -396,6 +409,18 @@ label.wide {
 
 .field-watermark {
   grid-area: watermark;
+}
+
+.document-number-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.document-number-button {
+  height: 44px;
+  min-width: 62px;
+  white-space: nowrap;
 }
 
 .template-picker,

@@ -170,6 +170,8 @@ Gmail SMTP는 `smtp.gmail.com:587` STARTTLS와 Google 앱 비밀번호를 사용
 - 수신자, 문서번호, 표시용 만료일 필수
 - 워터마크 문구 필수
 
+신규 문서의 문서번호는 작성일자를 포함한 `접두어-YYYYMMDD-A1B2` 형태의 문자+숫자 조합으로 기본 채번되며, 문서번호 필드의 채번 버튼으로 다시 생성할 수 있습니다.
+
 정책 profile 플러그인은 이 기본값보다 강한 조건만 추가할 수 있습니다. 여러 정책 profile이 활성화되면 가장 강한 최소 PIN 길이, 가장 강한 최소 KDF 반복 횟수, 필수 메타데이터 합집합, 워터마크 요구 여부를 보수적으로 병합합니다. 자세한 내용은 [docs/publish-policy-plugins.md](docs/publish-policy-plugins.md)를 참고하세요.
 
 ## 브랜딩 preset
