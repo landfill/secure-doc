@@ -168,6 +168,8 @@ test("insurance certificate template renders confirmation-style tables safely", 
   assert.match(html, /2\. 보험가입내용/);
   assert.match(html, /3\. 확인 및 발행/);
   assert.match(html, /<table>/);
+  assert.match(html, /<thead>/);
+  assert.match(html, /<tbody>/);
   assert.match(html, /rowspan="2"/);
   assert.match(html, /colspan="5"/);
   assert.match(html, /프리미 해외여행보험 III/);

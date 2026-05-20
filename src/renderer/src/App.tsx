@@ -442,8 +442,9 @@ const SecureDocTextAlign = Extension.create({
 });
 
 function parseTableSpan(element: HTMLElement, attrName: "colspan" | "rowspan"): number | null {
-  const value = Number.parseInt(element.getAttribute(attrName) ?? "", 10);
-  return Number.isInteger(value) && value > 1 && value <= 12 ? value : null;
+  const attrValue = element.getAttribute(attrName) ?? "";
+  const value = Number.parseInt(attrValue, 10);
+  return String(value) === attrValue.trim() && value > 1 && value <= 12 ? value : null;
 }
 
 const tableSpanAttributes = {
@@ -462,14 +463,40 @@ const tableSpanAttributes = {
 const SecureDocTable = TiptapNode.create({
   name: "secureDocTable",
   group: "block",
-  content: "secureDocTableRow+",
+  content: "secureDocTableHead? secureDocTableBody?",
 
   parseHTML() {
     return [{ tag: "table" }];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ["table", mergeAttributes(HTMLAttributes), ["tbody", 0]];
+    return ["table", mergeAttributes(HTMLAttributes), 0];
+  }
+});
+
+const SecureDocTableHead = TiptapNode.create({
+  name: "secureDocTableHead",
+  content: "secureDocTableRow+",
+
+  parseHTML() {
+    return [{ tag: "thead" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["thead", mergeAttributes(HTMLAttributes), 0];
+  }
+});
+
+const SecureDocTableBody = TiptapNode.create({
+  name: "secureDocTableBody",
+  content: "secureDocTableRow+",
+
+  parseHTML() {
+    return [{ tag: "tbody" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["tbody", mergeAttributes(HTMLAttributes), 0];
   }
 });
 
@@ -878,6 +905,8 @@ export function App(): ReactElement {
         }
       }),
       SecureDocTable,
+      SecureDocTableHead,
+      SecureDocTableBody,
       SecureDocTableRow,
       SecureDocTableHeader,
       SecureDocTableCell,
