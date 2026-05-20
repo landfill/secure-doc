@@ -1,10 +1,11 @@
 # Secure Doc Admin
 
-[![Open Source](https://img.shields.io/badge/open%20source-100%25-2ea44f?style=for-the-badge)](https://github.com/landfill/secure-doc)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![Offline First](https://img.shields.io/badge/offline--first-single%20HTML-0f172a?style=for-the-badge)](#보안-모델)
-[![Security Model](https://img.shields.io/badge/security%20model-documented-2563eb?style=for-the-badge)](#보안-모델)
-[![Plugins](https://img.shields.io/badge/plugins-allowlisted-f97316?style=for-the-badge)](#내장-플러그인)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6.svg?logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61dafb.svg?logo=react&logoColor=black)
+![Electron](https://img.shields.io/badge/Electron-42-47848f.svg?logo=electron&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-7-646cff.svg?logo=vite&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933.svg?logo=node.js&logoColor=white)
 
 Secure Doc Admin은 Electron + React/TypeScript 기반의 오프라인 보안 문서 발행 도구입니다. 관리자는 문서를 작성한 뒤 PIN으로 보호된 단일 HTML 패키지를 발행하고, 수신자는 별도로 전달받은 PIN으로 브라우저에서 문서를 열람합니다.
 
