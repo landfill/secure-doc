@@ -374,15 +374,25 @@ button.primary {
 }
 
 label {
+  display: grid;
+  gap: 7px;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.metadata-panel label {
   display: block;
   color: var(--muted);
   font-size: 11px;
   font-weight: 500;
   margin-bottom: 2px;
+  gap: 0;
 }
 
 .metadata-field,
-.metadata-panel .form-grid > label {
+.metadata-panel .form-grid > label,
+.admin-meta-grid > label {
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -394,7 +404,8 @@ label {
 }
 
 .metadata-field:focus-within,
-.metadata-panel .form-grid > label:focus-within {
+.metadata-panel .form-grid > label:focus-within,
+.admin-meta-grid > label:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
