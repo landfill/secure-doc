@@ -1851,17 +1851,25 @@ export function App(): ReactElement {
               <input value={metadata.watermarkText} onChange={(event) => updateMetadata("watermarkText", event.target.value)} />
             </label>
           </div>
-          <div className="template-picker">
-            <label>
-              {t("field.template")}
-              <select value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)}>
+          <div className="pickers-row">
+            <div className="metadata-field template-picker">
+            <label htmlFor="template-select">{t("field.template")}</label>
+            <div className="picker-control">
+              <select id="template-select" value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)}>
                 {availableDocumentTemplates.map((template) => (
                   <option key={template.id} value={template.id}>
                     {templateOptionLabel(template, locale)}
                   </option>
                 ))}
               </select>
-            </label>
+              <button
+                type="button"
+                className={["template-apply-button", templateApplyPending ? "pending" : ""].filter(Boolean).join(" ")}
+                onClick={handleApplySelectedTemplate}
+              >
+                {t("template.apply")}
+              </button>
+            </div>
             <div className="template-summary">
               <strong>{templateDisplayName(selectedTemplate, locale)}</strong>
               <span>{templateDisplayDescription(selectedTemplate, locale)}</span>
@@ -1880,19 +1888,13 @@ export function App(): ReactElement {
                 </span>
               </div>
             </div>
-            <button
-              type="button"
-              className={["template-apply-button", templateApplyPending ? "pending" : ""].filter(Boolean).join(" ")}
-              onClick={handleApplySelectedTemplate}
-            >
-              {t("template.apply")}
-            </button>
           </div>
           {activeBrandingPresets.length > 0 && (
-            <div className="branding-picker">
-              <label>
-                {t("field.branding")}
+            <div className="metadata-field branding-picker">
+              <label htmlFor="branding-select">{t("field.branding")}</label>
+              <div className="picker-control">
                 <select
+                  id="branding-select"
                   value={selectedBrandingPresetKey}
                   onChange={(event) => setSelectedBrandingPresetKey(event.target.value)}
                 >
@@ -1902,7 +1904,15 @@ export function App(): ReactElement {
                     </option>
                   ))}
                 </select>
-              </label>
+                <button
+                  type="button"
+                  className={["branding-apply-button", brandingApplyPending ? "pending" : ""].filter(Boolean).join(" ")}
+                  onClick={handleApplySelectedBrandingPreset}
+                  disabled={!selectedBrandingPreset}
+                >
+                  {selectedBrandingMetadataChanged ? t("branding.reapply") : t("branding.apply")}
+                </button>
+              </div>
               <div className="branding-summary">
                 {selectedBrandingPreset ? (
                   <>
@@ -1930,16 +1940,9 @@ export function App(): ReactElement {
                   <span>{t("branding.noActive")}</span>
                 )}
               </div>
-              <button
-                type="button"
-                className={["branding-apply-button", brandingApplyPending ? "pending" : ""].filter(Boolean).join(" ")}
-                onClick={handleApplySelectedBrandingPreset}
-                disabled={!selectedBrandingPreset}
-              >
-                {selectedBrandingMetadataChanged ? t("branding.reapply") : t("branding.apply")}
-              </button>
             </div>
           )}
+          </div>
           <details className="admin-meta-details">
             <summary>{t("field.adminInfo")}</summary>
             <div className="admin-meta-grid">
