@@ -26,10 +26,11 @@ Secure Doc Admin is an offline secure document issuer built with Electron, React
 - CSP `connect-src 'none'`
 - Publish history, package SHA-256 recording, and saved-file integrity audits
 - Secure HTML attachment delivery through Gmail SMTP and Generic SMTP plugins
-- Email delivery immediately after publishing or from publish history
+- Publish completion step with Show in folder, Copy file path, and Copy PIN for manual delivery through Teams, Outlook, or a messenger
+- Optional email delivery from the publish completion step or publish history when an SMTP plugin is enabled
 - Strict default publish policy with stronger policy plugins merged conservatively
 - Branding preset plugin for issuer, watermark, and viewer color settings
-- Bright Product Launch Light based bento card UI with a neutral desktop sidebar
+- Bright Product Launch Light based bento card UI with a three-item sidebar: Write document, Publish history, Settings
 - No storage of plaintext PINs, PIN hashes, plaintext document bodies, DEKs, or KEKs
 
 ## Architecture
@@ -98,6 +99,8 @@ The renderer collects document body and publish inputs, but it does not store pl
 
 ## Authoring Flow
 
+The document details panel shows only the fields needed to publish: title, issuer, recipient, document number, display expiration date, and watermark text. Document type, admin memo, and publishing operator are grouped in the collapsible `Additional details` section.
+
 Choosing a document type changes classification metadata. It does not overwrite the body automatically. If a template exists for the selected type, the template selection moves so the user can clearly see the next available action.
 
 To replace the body, press the `Apply template to body` button. If the document already has body content, the app uses an internal confirmation dialog before overwriting it.
@@ -111,11 +114,17 @@ Default templates:
 
 When the `template-pack.business-samples` plugin is enabled, insurance certificate and billing statement templates are added. The insurance certificate template includes basic information, coverage information, and an issuance confirmation table similar to a membership certificate sample. Template packs do not load executable code. They only contribute trusted static template IDs from the bundled app.
 
+## Publish and Hand-Off
+
+The publish dialog asks for the PIN and viewer language. It does not offer a KDF iteration choice: the package always uses the effective publish policy minimum (1,000,000 PBKDF2 iterations by default, or a stronger policy profile minimum).
+
+After the file is saved, the dialog stays open on a `Published` step instead of closing. It shows the saved path and offers `Show in folder`, `Copy file path`, and `Copy PIN`, plus `Send by email` when an SMTP delivery plugin is enabled. The step reminds the operator to send the PIN through a different channel than the document. The manual flow (save the file, then hand the file and PIN over through Teams, Outlook, or an internal messenger) works without any plugin. The PIN is cleared from app state when this step closes.
+
 ## Multilingual Display Policy
 
 The admin UI supports Korean (`ko`) and English (`en`). The app's default admin language is Korean. The selected admin display language is stored by the Electron main process in a local settings file under `userData`, not in browser storage. Language settings are managed in the `Settings` screen, not through an immediate picker at the bottom of the sidebar.
 
-The Settings screen also shows the current app version and prerelease channel information. The version from `package.json` is passed to the renderer through the Electron main process. Production menus do not expose Electron's default developer tools or edit menus.
+The Settings screen also contains `Extensions` (plugin toggles and SMTP settings) and `Security information` (a static summary of the core security model), and shows the current app version and prerelease channel information. The version from `package.json` is passed to the renderer through the Electron main process. Production menus do not expose Electron's default developer tools or edit menus.
 
 ## Design Principles
 
@@ -127,7 +136,7 @@ Generated viewers display unlock guidance, PIN labels, progress states, and publ
 
 ## Built-In Plugins
 
-Plugins run only through bundled manifests and allowlisted main-process actions. External plugin code, remote registries, and runtime JavaScript loading are not supported. Every plugin must be explicitly enabled in local state before its contributions appear.
+Plugins run only through bundled manifests and allowlisted main-process actions. External plugin code, remote registries, and runtime JavaScript loading are not supported. Every plugin must be explicitly enabled in local state before its contributions appear. Plugins are managed in Settings > Extensions. While a plugin is disabled, its UI is hidden rather than shown as disabled: template-pack templates, the branding preset picker and publish-dialog branding summary, the publish history email column, and the `Send by email` button.
 
 Encryption, PIN/key handling, the DEK/KEK structure, the offline viewer, CSP, and package integrity verification are core security surfaces. Plugins cannot replace or weaken those areas. They may only extend delivery channels, static templates, branding presets, and operational/reporting helpers.
 
