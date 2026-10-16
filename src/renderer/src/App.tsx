@@ -46,7 +46,6 @@ import {
 } from "../../shared/documentTemplates";
 import { generatePresetDocumentNumber } from "../../shared/documentNumbers";
 import {
-  DEFAULT_PIN_KDF_ITERATIONS,
   evaluatePinPolicy,
   GENERATED_PIN_LENGTH,
   generatePin,
@@ -75,7 +74,7 @@ type EditorMode = "visual" | "html";
 type HeadingLevel = 1 | 2 | 3;
 type BlockStyle = "paragraph" | `heading-${HeadingLevel}`;
 type TextAlign = "left" | "center" | "right" | "justify";
-type NavTarget = "document" | "history" | "security" | "plugins" | "settings";
+type NavTarget = "document" | "history" | "settings";
 const documentTypes = ["안내문", "계약서", "정책/규정", "기타", "보험증서", "고지서"] as const;
 type DocumentType = (typeof documentTypes)[number];
 
@@ -132,6 +131,13 @@ type EmailSendForm = {
   attachmentFileName: string;
 };
 
+type PublishedPackage = {
+  documentId: string;
+  title: string;
+  attachmentFileName: string;
+  filePath: string;
+};
+
 type SmtpActionSelection = {
   pluginId: SmtpDeliveryPluginId;
   actionId: string;
@@ -173,7 +179,7 @@ const defaultEmailSendForm: EmailSendForm = {
   attachmentFileName: ""
 };
 
-const navigationTargets: readonly NavTarget[] = ["document", "history", "security", "plugins", "settings"];
+const navigationTargets: readonly NavTarget[] = ["document", "history", "settings"];
 const fallbackAppInfo: AppInfo = {
   name: "Secure Doc Admin",
   version: ""
@@ -726,7 +732,6 @@ export function App(): ReactElement {
   const [pin, setPin] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [showPin, setShowPin] = useState(false);
-  const [iterations, setIterations] = useState(DEFAULT_PIN_KDF_ITERATIONS);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -743,6 +748,7 @@ export function App(): ReactElement {
   const [settingsError, setSettingsError] = useState("");
   const [syncPresetWithMetadata, setSyncPresetWithMetadata] = useState(true);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [publishedPackage, setPublishedPackage] = useState<PublishedPackage | null>(null);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [pendingEmailPackage, setPendingEmailPackage] = useState<PendingEmailPackage | null>(null);
   const [emailSendForm, setEmailSendForm] = useState<EmailSendForm>(defaultEmailSendForm);
@@ -769,10 +775,7 @@ export function App(): ReactElement {
 
   const activePolicyProfiles = pluginContributions.policyProfiles;
   const effectivePublishPolicy = useMemo(() => getEffectivePublishPolicy(activePolicyProfiles), [activePolicyProfiles]);
-  const kdfIterationOptions = useMemo(
-    () => [...new Set([DEFAULT_PIN_KDF_ITERATIONS, effectivePublishPolicy.minimumKdfIterations])].sort((left, right) => left - right),
-    [effectivePublishPolicy.minimumKdfIterations]
-  );
+  const iterations = effectivePublishPolicy.minimumKdfIterations;
   const publishPolicyRequirementItems = useMemo(() => {
     const items = [
       translate(locale, "policy.pinLength", { min: effectivePublishPolicy.minimumPinLength, max: PIN_MAX_LENGTH }),
@@ -1072,14 +1075,14 @@ export function App(): ReactElement {
     }
 
     function handleKeyDown(event: KeyboardEvent): void {
-      if (event.key === "Escape" && !busy) {
-        setPublishDialogOpen(false);
+      if (event.key === "Escape" && !emailDialogOpen) {
+        closePublishDialog();
       }
     }
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [busy, publishDialogOpen]);
+  }, [busy, emailDialogOpen, publishDialogOpen, publishedPackage]);
 
   useEffect(() => {
     if (!emailDialogOpen) {
@@ -1360,9 +1363,50 @@ export function App(): ReactElement {
   }
 
   function closePublishDialog(): void {
-    if (!busy) {
-      setPublishDialogOpen(false);
+    if (busy) {
+      return;
     }
+    setPublishDialogOpen(false);
+    if (publishedPackage) {
+      setStatus(t("publish.completed", { path: publishedPackage.filePath }));
+      setError("");
+      setPublishedPackage(null);
+      setPin("");
+      setPinConfirm("");
+    }
+  }
+
+  async function handleCopyPublishedPath(): Promise<void> {
+    if (!publishedPackage) {
+      return;
+    }
+    await navigator.clipboard.writeText(publishedPackage.filePath);
+    setStatus(t("publish.copiedPath"));
+    setError("");
+  }
+
+  function openPublishEmailDialog(): void {
+    if (!activeSmtpSendAction || !publishedPackage) {
+      return;
+    }
+
+    setPreferredSmtpPluginId(activeSmtpSendAction.pluginId);
+    setPendingEmailPackage({
+      source: "publish",
+      pluginId: activeSmtpSendAction.pluginId,
+      actionId: activeSmtpSendAction.actionId,
+      documentId: publishedPackage.documentId,
+      attachmentFileName: publishedPackage.attachmentFileName,
+      filePath: publishedPackage.filePath
+    });
+    setEmailSendForm({
+      recipientEmail: "",
+      subject: t("email.subjectPrefix", { title: publishedPackage.title }),
+      attachmentFileName: publishedPackage.attachmentFileName
+    });
+    setStatus("");
+    setError("");
+    setEmailDialogOpen(true);
   }
 
   function updateSmtpSettingsForm<K extends keyof SmtpSettingsForm>(
@@ -1706,32 +1750,18 @@ export function App(): ReactElement {
         }
       });
 
-      if (saveResult.canceled) {
+      if (saveResult.canceled || !saveResult.filePath) {
         setStatus(t("publish.saveCanceled"));
         return;
       }
 
-      setStatus(t("publish.completed", { path: saveResult.filePath ?? "" }));
-      setPublishDialogOpen(false);
-      setPin("");
-      setPinConfirm("");
-      if (activeSmtpSendAction && saveResult.filePath) {
-        setPreferredSmtpPluginId(activeSmtpSendAction.pluginId);
-        setPendingEmailPackage({
-          source: "publish",
-          pluginId: activeSmtpSendAction.pluginId,
-          actionId: activeSmtpSendAction.actionId,
-          documentId: securePackage.doc.id,
-          attachmentFileName: suggestedFileName,
-          filePath: saveResult.filePath
-        });
-        setEmailSendForm({
-          recipientEmail: "",
-          subject: t("email.subjectPrefix", { title: securePackage.doc.title }),
-          attachmentFileName: suggestedFileName
-        });
-        setEmailDialogOpen(true);
-      }
+      setStatus("");
+      setPublishedPackage({
+        documentId: securePackage.doc.id,
+        title: securePackage.doc.title,
+        attachmentFileName: suggestedFileName,
+        filePath: saveResult.filePath
+      });
       const nextHistory = await window.secureDoc.getHistory();
       setHistory(nextHistory);
     } catch (caught) {
@@ -1797,16 +1827,6 @@ export function App(): ReactElement {
             <h2 id="metadata-heading">{t("section.metadata")}</h2>
           </div>
           <div className="form-grid document-meta-grid">
-            <label className="field-type">
-              {t("field.docType")}
-              <select value={metadata.docType} onChange={(event) => handleDocumentTypeChange(event.target.value as DocumentType)}>
-                {documentTypes.map((docType) => (
-                  <option key={docType} value={docType}>
-                    {documentTypeLabel(docType, locale)}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label className="field-title">
               {t("field.title")}
               <input value={metadata.title} onChange={(event) => updateMetadata("title", event.target.value)} />
@@ -1946,6 +1966,16 @@ export function App(): ReactElement {
           <details className="admin-meta-details">
             <summary>{t("field.adminInfo")}</summary>
             <div className="admin-meta-grid">
+              <label className="field-type">
+                {t("field.docType")}
+                <select value={metadata.docType} onChange={(event) => handleDocumentTypeChange(event.target.value as DocumentType)}>
+                  {documentTypes.map((docType) => (
+                    <option key={docType} value={docType}>
+                      {documentTypeLabel(docType, locale)}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="field-description">
                 {t("field.description")}
                 <input value={metadata.description} onChange={(event) => updateMetadata("description", event.target.value)} />
@@ -2177,35 +2207,6 @@ export function App(): ReactElement {
           </>
         )}
 
-        {activeNavTarget === "security" && (
-        <section
-          className="panel security-panel"
-          aria-labelledby="security-heading"
-        >
-          <div className="section-heading">
-            <h2 id="security-heading">{t("section.security")}</h2>
-          </div>
-          <div className="security-policy-grid">
-            <div className="security-policy-item">
-              <strong>{t("security.pinTitle")}</strong>
-              <span>{t("security.pinText")}</span>
-            </div>
-            <div className="security-policy-item">
-              <strong>{t("security.cryptoTitle")}</strong>
-              <span>{t("security.cryptoText")}</span>
-            </div>
-            <div className="security-policy-item">
-              <strong>{t("security.viewerTitle")}</strong>
-              <span>{t("security.viewerText")}</span>
-            </div>
-            <div className="security-policy-item">
-              <strong>{t("security.noStoreTitle")}</strong>
-              <span>{t("security.noStoreText")}</span>
-            </div>
-          </div>
-        </section>
-        )}
-
         {activeNavTarget === "history" && (
         <section
           className="panel history-panel"
@@ -2223,14 +2224,14 @@ export function App(): ReactElement {
                   <th>{t("history.columnIterations")}</th>
                   <th>SHA-256</th>
                   <th>{t("history.columnFile")}</th>
-                  <th>{t("history.columnEmail")}</th>
+                  {smtpHistorySendActionEnabled && <th>{t("history.columnEmail")}</th>}
                   <th>{t("history.columnAudit")}</th>
                 </tr>
               </thead>
               <tbody>
                 {history.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>{t("history.empty")}</td>
+                    <td colSpan={smtpHistorySendActionEnabled ? 7 : 6}>{t("history.empty")}</td>
                   </tr>
                 ) : (
                   history.map((item) => (
@@ -2247,15 +2248,13 @@ export function App(): ReactElement {
                           {t("action.view")}
                         </button>
                       </td>
-                      <td>
-                        <button
-                          type="button"
-                          onClick={() => openHistoryEmailDialog(item)}
-                          disabled={!smtpHistorySendActionEnabled}
-                        >
-                          {t("action.send")}
-                        </button>
-                      </td>
+                      {smtpHistorySendActionEnabled && (
+                        <td>
+                          <button type="button" onClick={() => openHistoryEmailDialog(item)}>
+                            {t("action.send")}
+                          </button>
+                        </td>
+                      )}
                       <td>
                         <button
                           type="button"
@@ -2301,7 +2300,65 @@ export function App(): ReactElement {
         </section>
         )}
 
-        {activeNavTarget === "plugins" && (
+        {activeNavTarget === "settings" && (
+        <section
+          className="panel settings-panel"
+          aria-labelledby="settings-heading"
+        >
+          <div className="section-heading">
+            <h2 id="settings-heading">{t("section.settings")}</h2>
+          </div>
+          {(settingsStatus || settingsError) && (
+            <div
+              className={settingsError ? "settings-feedback error" : "settings-feedback success"}
+              role={settingsError ? "alert" : "status"}
+            >
+              <span className="settings-feedback-dot" aria-hidden="true" />
+              <span>{settingsError || settingsStatus}</span>
+            </div>
+          )}
+          <div className="settings-list">
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <strong>{t("settings.displayLanguage")}</strong>
+                <span>{t("settings.displayLanguageDescription")}</span>
+              </div>
+              <label className="settings-control">
+                <span className="sr-only">{t("settings.displayLanguage")}</span>
+                <select value={locale} onChange={(event) => handleLocaleChange(event.target.value)}>
+                  {SUPPORTED_LOCALES.map((item) => (
+                    <option key={item} value={item}>
+                      {translate(item, `locale.${item}` as TranslationKey)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <strong>{t("settings.appInfo")}</strong>
+                <span>{t("settings.appInfoDescription")}</span>
+              </div>
+              <dl className="settings-info-grid">
+                <div>
+                  <dt>{t("settings.product")}</dt>
+                  <dd>{appInfo.name}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.version")}</dt>
+                  <dd>{appVersionLabel}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.releaseChannel")}</dt>
+                  <dd>{t("settings.previewRelease")}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </section>
+        )}
+
+        {activeNavTarget === "settings" && (
         <section
           className="panel plugins-panel"
           aria-labelledby="plugins-heading"
@@ -2543,57 +2600,28 @@ export function App(): ReactElement {
 
         {activeNavTarget === "settings" && (
         <section
-          className="panel settings-panel"
-          aria-labelledby="settings-heading"
+          className="panel security-panel"
+          aria-labelledby="security-heading"
         >
           <div className="section-heading">
-            <h2 id="settings-heading">{t("section.settings")}</h2>
+            <h2 id="security-heading">{t("section.security")}</h2>
           </div>
-          {(settingsStatus || settingsError) && (
-            <div
-              className={settingsError ? "settings-feedback error" : "settings-feedback success"}
-              role={settingsError ? "alert" : "status"}
-            >
-              <span className="settings-feedback-dot" aria-hidden="true" />
-              <span>{settingsError || settingsStatus}</span>
+          <div className="security-policy-grid">
+            <div className="security-policy-item">
+              <strong>{t("security.pinTitle")}</strong>
+              <span>{t("security.pinText")}</span>
             </div>
-          )}
-          <div className="settings-list">
-            <div className="settings-row">
-              <div className="settings-row-copy">
-                <strong>{t("settings.displayLanguage")}</strong>
-                <span>{t("settings.displayLanguageDescription")}</span>
-              </div>
-              <label className="settings-control">
-                <span className="sr-only">{t("settings.displayLanguage")}</span>
-                <select value={locale} onChange={(event) => handleLocaleChange(event.target.value)}>
-                  {SUPPORTED_LOCALES.map((item) => (
-                    <option key={item} value={item}>
-                      {translate(item, `locale.${item}` as TranslationKey)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="security-policy-item">
+              <strong>{t("security.cryptoTitle")}</strong>
+              <span>{t("security.cryptoText")}</span>
             </div>
-            <div className="settings-row">
-              <div className="settings-row-copy">
-                <strong>{t("settings.appInfo")}</strong>
-                <span>{t("settings.appInfoDescription")}</span>
-              </div>
-              <dl className="settings-info-grid">
-                <div>
-                  <dt>{t("settings.product")}</dt>
-                  <dd>{appInfo.name}</dd>
-                </div>
-                <div>
-                  <dt>{t("settings.version")}</dt>
-                  <dd>{appVersionLabel}</dd>
-                </div>
-                <div>
-                  <dt>{t("settings.releaseChannel")}</dt>
-                  <dd>{t("settings.previewRelease")}</dd>
-                </div>
-              </dl>
+            <div className="security-policy-item">
+              <strong>{t("security.viewerTitle")}</strong>
+              <span>{t("security.viewerText")}</span>
+            </div>
+            <div className="security-policy-item">
+              <strong>{t("security.noStoreTitle")}</strong>
+              <span>{t("security.noStoreText")}</span>
             </div>
           </div>
         </section>
@@ -2612,11 +2640,44 @@ export function App(): ReactElement {
         >
           <section className="publish-dialog" role="dialog" aria-modal="true" aria-labelledby="publish-dialog-heading">
             <div className="publish-dialog-header">
-              <h2 id="publish-dialog-heading">{t("publish.title")}</h2>
+              <h2 id="publish-dialog-heading">{publishedPackage ? t("publish.doneTitle") : t("publish.title")}</h2>
               <button type="button" className="dialog-close" onClick={closePublishDialog} disabled={busy}>
                 {t("action.close")}
               </button>
             </div>
+            {publishedPackage ? (
+              <>
+                <div className="attachment-confirm publish-done-file">
+                  <span>{t("email.savedPath")}</span>
+                  <strong>{publishedPackage.filePath}</strong>
+                </div>
+                <p className="security-note publish-note">{t("publish.doneChannelNote")}</p>
+                <div className="button-row publish-done-actions">
+                  <button type="button" onClick={() => void window.secureDoc?.showItemInFolder(publishedPackage.filePath)}>
+                    {t("publish.showInFolder")}
+                  </button>
+                  <button type="button" onClick={() => void handleCopyPublishedPath()}>
+                    {t("publish.copyPath")}
+                  </button>
+                  <button type="button" onClick={() => void handleCopyPin()}>
+                    {t("publish.copyPin")}
+                  </button>
+                  {activeSmtpSendAction && (
+                    <button type="button" onClick={openPublishEmailDialog}>
+                      {t("publish.sendEmail")}
+                    </button>
+                  )}
+                </div>
+                <div className="button-row publish-dialog-actions">
+                  <button type="button" className="primary" onClick={closePublishDialog}>
+                    {t("publish.done")}
+                  </button>
+                </div>
+                {status && <div className="status">{status}</div>}
+                {error && <div className="error">{error}</div>}
+              </>
+            ) : (
+              <>
             <p className="security-note publish-note">
               {t("publish.note")}
             </p>
@@ -2632,17 +2693,19 @@ export function App(): ReactElement {
                 ))}
               </ul>
             </div>
-            <div className="publish-branding-summary">
-              <strong>{t("publish.branding")}</strong>
-              {activeBrandingPreset ? (
-                <span>
-                  {activeBrandingPreset.pluginName} · {activeBrandingPreset.label}
-                  {` · ${t("publish.currentWatermark", { watermark: metadata.watermarkText || t("publish.noWatermark") })}`}
-                </span>
-              ) : (
-                <span>{t("publish.defaultViewerStyle")}</span>
-              )}
-            </div>
+            {activeBrandingPresets.length > 0 && (
+              <div className="publish-branding-summary">
+                <strong>{t("publish.branding")}</strong>
+                {activeBrandingPreset ? (
+                  <span>
+                    {activeBrandingPreset.pluginName} · {activeBrandingPreset.label}
+                    {` · ${t("publish.currentWatermark", { watermark: metadata.watermarkText || t("publish.noWatermark") })}`}
+                  </span>
+                ) : (
+                  <span>{t("publish.defaultViewerStyle")}</span>
+                )}
+              </div>
+            )}
             <label className="publish-viewer-language">
               {t("field.viewerLanguage")}
               <select value={viewerLocale} onChange={(event) => setViewerLocale(resolveLocale(event.target.value))}>
@@ -2654,7 +2717,7 @@ export function App(): ReactElement {
               </select>
               <span className="field-hint">{t("field.viewerLanguagePolicy")}</span>
             </label>
-            <div className="publish-dialog-grid">
+            <div className="publish-dialog-grid publish-pin-grid">
               <label className="field-pin">
                 {t("publish.pinLabel")}
                 <input
@@ -2672,17 +2735,6 @@ export function App(): ReactElement {
                   type={showPin ? "text" : "password"}
                   autoComplete="one-time-code"
                 />
-              </label>
-              <label className="field-iterations">
-                {t("publish.iterations")}
-                <select value={iterations} onChange={(event) => setIterations(Number(event.target.value))}>
-                  {kdfIterationOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option.toLocaleString()}
-                      {option === DEFAULT_PIN_KDF_ITERATIONS ? t("publish.defaultOption") : t("publish.policyOption")}
-                    </option>
-                  ))}
-                </select>
               </label>
             </div>
             <div className="button-row publish-dialog-actions">
@@ -2712,6 +2764,8 @@ export function App(): ReactElement {
             )}
             {status && <div className="status">{status}</div>}
             {error && <div className="error">{error}</div>}
+              </>
+            )}
           </section>
         </div>
       )}
