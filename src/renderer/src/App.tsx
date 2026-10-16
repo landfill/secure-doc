@@ -1380,9 +1380,14 @@ export function App(): ReactElement {
     if (!publishedPackage) {
       return;
     }
-    await navigator.clipboard.writeText(publishedPackage.filePath);
-    setStatus(t("publish.copiedPath"));
-    setError("");
+    try {
+      await navigator.clipboard.writeText(publishedPackage.filePath);
+      setStatus(t("publish.copiedPath"));
+      setError("");
+    } catch {
+      setStatus("");
+      setError(t("publish.copyFailed"));
+    }
   }
 
   function openPublishEmailDialog(): void {
@@ -1687,9 +1692,14 @@ export function App(): ReactElement {
       setError(pinResult.message);
       return;
     }
-    await navigator.clipboard.writeText(pinResult.normalizedPin);
-    setStatus(t("publish.copiedPin"));
-    setError("");
+    try {
+      await navigator.clipboard.writeText(pinResult.normalizedPin);
+      setStatus(t("publish.copiedPin"));
+      setError("");
+    } catch {
+      setStatus("");
+      setError(t("publish.copyFailed"));
+    }
   }
 
   async function handlePublish(): Promise<void> {
