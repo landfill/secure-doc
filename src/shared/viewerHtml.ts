@@ -584,10 +584,8 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     status.textContent = ${escapeJsonForScript(translate(locale, "viewer.decrypting"))};
     try {
       const content = await unlock(pinInput.value);
-      if (content.format === "html-attachment") {
-        attachmentFrame.srcdoc = String(content.html || "");
-        document.body.classList.add("attachment");
-      } else {
+      const isAttachment = content.format === "html-attachment";
+      if (!isAttachment) {
         documentInner.innerHTML = sanitizeHtml(content.html);
       }
       const watermarkText = String(content.privateMeta && content.privateMeta.watermarkText || "").trim();
@@ -598,6 +596,11 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       pinInput.value = "";
       status.textContent = "";
       document.body.classList.add("unlocked");
+      if (isAttachment) {
+        // Show the frame before loading it; a srcdoc set while hidden can stay blank in Chromium.
+        document.body.classList.add("attachment");
+        attachmentFrame.srcdoc = String(content.html || "");
+      }
     } catch {
       error.textContent = PUBLIC_ERROR;
       status.textContent = "";
