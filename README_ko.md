@@ -16,6 +16,7 @@ Secure Doc Admin은 Electron + React/TypeScript 기반의 오프라인 보안 �
 ## 주요 기능
 
 - Tiptap 기반 WYSIWYG 본문 편집과 HTML 보기 모드
+- HTML 파일 첨부: 기존 `.html` 파일을 원본 그대로 암호화하고 뷰어에서는 완전히 격리된 프레임에 표시
 - 문서 유형 분류와 명시적 템플릿 적용 흐름
 - 설정 화면의 관리자 UI 한국어/영어 전환과 문서별 오프라인 viewer 언어 선택
 - 기본 문서 템플릿과 내장 템플릿팩 플러그인
@@ -113,6 +114,8 @@ Renderer는 문서 본문과 발행 입력을 수집하지만 PIN 원문, PIN �
 - `core.general`: 일반 보안 문서
 
 `template-pack.business-samples` 플러그인을 활성화하면 보험증서와 고지서 템플릿이 추가됩니다. 보험증서는 가입확인서 샘플처럼 기본 정보, 보험가입내용, 발행 확인 표를 포함합니다. 템플릿팩은 실행 코드를 로드하지 않고, 신뢰된 번들 내부의 정적 템플릿 id만 기여합니다.
+
+기존 HTML 파일을 그대로 암호화하려면 편집 영역의 `HTML 파일` 탭에서 `.html`/`.htm` 파일(최대 20MB)을 선택합니다. 파일은 변경 없이 암호화되고, 뷰어는 `sandbox=""` iframe에 표시하므로 CSS와 레이아웃은 유지되지만 스크립트, 폼, 외부 접속은 차단됩니다. 파일에 스크립트나 외부 리소스 참조가 있으면 뷰어에서 해당 부분이 동작하지 않는다고 경고합니다. 자세한 내용은 [docs/html-attachment.md](docs/html-attachment.md)를 참고하세요.
 
 ## 발행과 전달
 
@@ -351,6 +354,7 @@ README 본문에는 보안 설계를 정확하게 표현하기 위해 표준 용
 - [docs/plugin-api.md](docs/plugin-api.md): 플러그인 manifest, 권한, 기여 지점 계약
 - [docs/document-templates.md](docs/document-templates.md): 문서 템플릿 registry와 template-pack 흐름
 - [docs/publish-policy-plugins.md](docs/publish-policy-plugins.md): 발행 정책 플러그인 동작
+- [docs/html-attachment.md](docs/html-attachment.md): HTML 파일 첨부 형식과 뷰어 sandbox
 
 ## 라이선스 정책
 

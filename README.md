@@ -16,6 +16,7 @@ Secure Doc Admin is an offline secure document issuer built with Electron, React
 ## Features
 
 - Tiptap-based WYSIWYG body editing and HTML view mode
+- HTML file attachment: encrypt an existing `.html` file as-is and show it in a fully sandboxed viewer frame
 - Document type classification and explicit template application flow
 - Korean and English admin UI switching in Settings, plus per-document offline viewer language selection
 - Default document templates and a built-in template-pack plugin
@@ -113,6 +114,8 @@ Default templates:
 - `core.general`: general secure document
 
 When the `template-pack.business-samples` plugin is enabled, insurance certificate and billing statement templates are added. The insurance certificate template includes basic information, coverage information, and an issuance confirmation table similar to a membership certificate sample. Template packs do not load executable code. They only contribute trusted static template IDs from the bundled app.
+
+To encrypt an existing HTML file instead, switch the editor to the `HTML file` tab and choose a `.html`/`.htm` file (up to 20 MB). The file is encrypted unchanged and the viewer shows it in an iframe with `sandbox=""`, so its CSS and layout are kept while scripts, forms, and network access are blocked. The app warns when the file contains scripts or references external resources, because those parts will not work in the viewer. See [docs/html-attachment.md](docs/html-attachment.md).
 
 ## Publish and Hand-Off
 
@@ -352,6 +355,7 @@ The README uses standard security terms to describe the design accurately. This 
 - [docs/plugin-api.md](docs/plugin-api.md): plugin manifest, permission, and contribution-point contract
 - [docs/document-templates.md](docs/document-templates.md): document template registry and template-pack flow
 - [docs/publish-policy-plugins.md](docs/publish-policy-plugins.md): publish policy plugin behavior
+- [docs/html-attachment.md](docs/html-attachment.md): HTML file attachment format and viewer sandbox
 
 ## License Policy
 

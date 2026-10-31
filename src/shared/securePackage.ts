@@ -10,7 +10,9 @@ export const PUBLIC_UNLOCK_ERROR = "PIN이 올바르지 않거나 문서가 손�
 export interface SecureDocPlainContent {
   type: "secure-doc-content";
   version: "1.0";
-  format: "html";
+  // "html": editor body, sanitized by the viewer allowlist.
+  // "html-attachment": original HTML file, rendered in a sandboxed iframe.
+  format: "html" | "html-attachment";
   html: string;
   assets: Array<never>;
   privateMeta?: {

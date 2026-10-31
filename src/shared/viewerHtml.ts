@@ -288,6 +288,38 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     body.unlocked .document {
       display: block;
     }
+    .attachment-frame {
+      display: none;
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      width: 100%;
+      border: 0;
+      background: #fff;
+    }
+    body.unlocked.attachment .shell {
+      height: 100vh;
+    }
+    body.unlocked.attachment main {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding: 0;
+    }
+    body.unlocked.attachment .document {
+      display: flex;
+      flex: 1;
+      padding: 0;
+    }
+    body.unlocked.attachment .document-inner {
+      display: none;
+    }
+    body.unlocked.attachment .attachment-frame {
+      display: block;
+    }
+    body.unlocked.attachment .watermark {
+      z-index: 2;
+    }
     @media print {
       header, .unlock { display: none; }
       body, .document { background: #fff; }
@@ -319,6 +351,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
       <section id="document" class="document" aria-live="polite">
         <div id="watermark" class="watermark" aria-hidden="true"></div>
         <div id="document-inner" class="document-inner"></div>
+        <iframe id="attachment-frame" class="attachment-frame" sandbox="" referrerpolicy="no-referrer" title="${escapeHtml(rawTitle)}"></iframe>
       </section>
     </main>
   </div>
@@ -336,6 +369,7 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
   const error = document.getElementById("error");
   const documentInner = document.getElementById("document-inner");
   const watermark = document.getElementById("watermark");
+  const attachmentFrame = document.getElementById("attachment-frame");
   const packageNode = document.getElementById("secure-doc-package");
   const pkg = JSON.parse(packageNode.textContent || "{}");
   const PIN_MIN_LENGTH = ${PIN_MIN_LENGTH};
@@ -550,7 +584,12 @@ export function buildSecureHtmlDocument(securePackage: SecureDocPackage): string
     status.textContent = ${escapeJsonForScript(translate(locale, "viewer.decrypting"))};
     try {
       const content = await unlock(pinInput.value);
-      documentInner.innerHTML = sanitizeHtml(content.html);
+      if (content.format === "html-attachment") {
+        attachmentFrame.srcdoc = String(content.html || "");
+        document.body.classList.add("attachment");
+      } else {
+        documentInner.innerHTML = sanitizeHtml(content.html);
+      }
       const watermarkText = String(content.privateMeta && content.privateMeta.watermarkText || "").trim();
       const branding = content.privateMeta && content.privateMeta.branding;
       applyViewerTheme(branding && branding.viewerTheme);
