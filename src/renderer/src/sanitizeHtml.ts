@@ -143,3 +143,11 @@ export function stripHtml(input: string): string {
   template.innerHTML = input;
   return template.content.textContent?.trim() ?? "";
 }
+
+export function readHtmlDocumentText(input: string): string {
+  const parsed = new DOMParser().parseFromString(input, "text/html");
+  for (const node of Array.from(parsed.querySelectorAll("script, style, template, noscript"))) {
+    node.remove();
+  }
+  return parsed.body?.textContent?.trim() ?? "";
+}

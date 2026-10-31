@@ -80,6 +80,7 @@ PIN이 올바르지 않거나 문서가 손상되었습니다.
 - 동일 PIN으로 여러 문서 발행 시 salt, IV, DEK가 모두 다른지 확인한다.
 - CSP로 외부 네트워크 요청이 차단되는지 확인한다.
 - XSS payload가 sanitizer 또는 안전 렌더러를 통과해도 실행되지 않는지 확인한다.
+- HTML 파일 첨부(`html-attachment`)는 `sandbox=""` srcdoc iframe에서만 렌더링되고 뷰어 CSP가 완화되지 않는지 확인한다. ([html-attachment.md](html-attachment.md))
 
 ## Assumptions
 - MVP는 Electron 단일 코드베이스 + macOS/Windows 개별 배포물을 기본 선택으로 한다.

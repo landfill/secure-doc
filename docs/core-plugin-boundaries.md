@@ -7,6 +7,7 @@ Secure Doc separates features into core security surfaces and plugin extension p
 Core behavior is always available and is not controlled by plugin enablement:
 
 - Document editing, sanitized preview, and safe HTML body preparation
+- HTML file attachment and its sandboxed viewer frame
 - Document metadata required for issuance history and viewer display
 - PIN normalization, strength checks, secure generation, and confirmation matching
 - WebCrypto package encryption with PBKDF2-HMAC-SHA-256, AES-256-GCM, and DEK/KEK separation

@@ -68,9 +68,28 @@ import {
   type Locale,
   type TranslationKey
 } from "../../shared/i18n";
-import { isAllowedLinkHref, removeUnsupportedEditorCharacters, sanitizeHtml, stripHtml } from "./sanitizeHtml";
+import {
+  analyzeHtmlAttachment,
+  decodeHtmlAttachment,
+  MAX_HTML_ATTACHMENT_BYTES,
+  withAttachmentPreviewCsp,
+  type HtmlAttachmentAnalysis
+} from "../../shared/htmlAttachment";
+import {
+  isAllowedLinkHref,
+  readHtmlDocumentText,
+  removeUnsupportedEditorCharacters,
+  sanitizeHtml,
+  stripHtml
+} from "./sanitizeHtml";
 
-type EditorMode = "visual" | "html";
+type EditorMode = "visual" | "html" | "attachment";
+type HtmlAttachment = HtmlAttachmentAnalysis & {
+  fileName: string;
+  size: number;
+  html: string;
+  text: string;
+};
 type HeadingLevel = 1 | 2 | 3;
 type BlockStyle = "paragraph" | `heading-${HeadingLevel}`;
 type TextAlign = "left" | "center" | "right" | "justify";
@@ -634,6 +653,12 @@ function normalizePinInput(value: string): string {
   return [...value].slice(0, PIN_MAX_LENGTH).join("");
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function safeFileNamePart(value: string): string {
   return value.normalize("NFKC").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-") || "secure-document";
 }
@@ -729,6 +754,7 @@ export function App(): ReactElement {
   const [metadata, setMetadata] = useState<MetadataState>(defaultMetadata);
   const [editorHtml, setEditorHtml] = useState(initialEditorHtml);
   const [editorMode, setEditorMode] = useState<EditorMode>("visual");
+  const [attachment, setAttachment] = useState<HtmlAttachment | null>(null);
   const [pin, setPin] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [showPin, setShowPin] = useState(false);
@@ -861,7 +887,14 @@ export function App(): ReactElement {
     [effectivePublishPolicy.minimumPinLength, locale, pin]
   );
   const sanitizedPreview = useMemo(() => sanitizeHtml(editorHtml), [editorHtml]);
-  const contentText = useMemo(() => stripHtml(sanitizedPreview), [sanitizedPreview]);
+  const attachmentPreviewHtml = useMemo(
+    () => (attachment ? withAttachmentPreviewCsp(attachment.html) : ""),
+    [attachment]
+  );
+  const contentText = useMemo(
+    () => (editorMode === "attachment" ? attachment?.text || attachment?.fileName || "" : stripHtml(sanitizedPreview)),
+    [attachment, editorMode, sanitizedPreview]
+  );
   const publishPolicyResult = useMemo(
     () =>
       evaluatePublishPolicy({
@@ -1240,6 +1273,11 @@ export function App(): ReactElement {
   }
 
   function switchEditorMode(nextMode: EditorMode): void {
+    if (nextMode === "attachment") {
+      setEditorMode("attachment");
+      return;
+    }
+
     if (nextMode === "html") {
       replaceEditorHtml(sanitizeHtml(editor?.getHTML() ?? editorHtml));
       setEditorMode("html");
@@ -1249,6 +1287,38 @@ export function App(): ReactElement {
     const sanitizedHtml = sanitizeHtml(editorHtml);
     replaceEditorHtml(sanitizedHtml);
     setEditorMode("visual");
+  }
+
+  async function handleAttachmentChange(file: File | undefined): Promise<void> {
+    if (!file) {
+      return;
+    }
+    if (file.size > MAX_HTML_ATTACHMENT_BYTES) {
+      setError(t("attachment.tooLarge", { max: MAX_HTML_ATTACHMENT_BYTES / (1024 * 1024) }));
+      setStatus("");
+      return;
+    }
+
+    try {
+      const html = decodeHtmlAttachment(new Uint8Array(await file.arrayBuffer()));
+      if (html === null) {
+        setError(t("attachment.encodingFailed"));
+        setStatus("");
+        return;
+      }
+      setAttachment({
+        ...analyzeHtmlAttachment(html),
+        fileName: file.name,
+        size: file.size,
+        html,
+        text: readHtmlDocumentText(html)
+      });
+      setError("");
+      setStatus("");
+    } catch {
+      setError(t("attachment.readFailed"));
+      setStatus("");
+    }
   }
 
   function runEditorCommand(action: () => boolean): void {
@@ -1345,6 +1415,12 @@ export function App(): ReactElement {
   }
 
   function openPublishDialog(): void {
+    if (editorMode === "attachment" && !attachment) {
+      setError(t("attachment.required"));
+      setStatus("");
+      return;
+    }
+
     const prerequisiteResult = evaluatePublishPrerequisites({
       metadata,
       contentText,
@@ -1721,8 +1797,8 @@ export function App(): ReactElement {
       const content: SecureDocPlainContent = {
         type: "secure-doc-content",
         version: "1.0",
-        format: "html",
-        html: sanitizedPreview,
+        format: editorMode === "attachment" && attachment ? "html-attachment" : "html",
+        html: editorMode === "attachment" && attachment ? attachment.html : sanitizedPreview,
         assets: [],
         privateMeta: compactPrivateMeta(publishMetadata, activeBrandingPreset)
       };
@@ -2020,8 +2096,16 @@ export function App(): ReactElement {
                 >
                   {t("editor.htmlMode")}
                 </button>
+                <button
+                  type="button"
+                  className={editorMode === "attachment" ? "active" : ""}
+                  onClick={() => switchEditorMode("attachment")}
+                >
+                  {t("editor.attachmentMode")}
+                </button>
               </div>
           </div>
+          {editorMode !== "attachment" && (
           <div className="editor-toolbar-row">
             <div className="editor-actions">
             <div className="toolbar" aria-label={t("editor.toolbarLabel")}>
@@ -2189,7 +2273,31 @@ export function App(): ReactElement {
               </div>
             </div>
           </div>
-          {editorMode === "visual" ? (
+          )}
+          {editorMode === "attachment" ? (
+            <div className="editor attachment-panel">
+              <label className="attachment-picker">
+                {attachment ? t("attachment.replace") : t("attachment.choose")}
+                <input
+                  type="file"
+                  accept=".html,.htm,text/html"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    void handleAttachmentChange(file);
+                  }}
+                />
+              </label>
+              <p className="attachment-file">
+                {attachment
+                  ? t("attachment.selected", { name: attachment.fileName, size: formatFileSize(attachment.size) })
+                  : t("attachment.empty")}
+              </p>
+              <p className="field-hint">{t("attachment.help")}</p>
+              {attachment?.hasScripts && <p className="policy">{t("attachment.scriptWarning")}</p>}
+              {attachment?.hasExternalResources && <p className="policy">{t("attachment.externalWarning")}</p>}
+            </div>
+          ) : editorMode === "visual" ? (
             <EditorContent editor={editor} className="editor rich-editor" />
           ) : (
             <textarea
@@ -2204,7 +2312,19 @@ export function App(): ReactElement {
           )}
           <div className="preview-band">
             <h3>{t("editor.preview")}</h3>
-            <div className="preview" dangerouslySetInnerHTML={{ __html: sanitizedPreview }} />
+            {editorMode === "attachment" ? (
+              attachment && (
+                <iframe
+                  className="attachment-preview"
+                  sandbox=""
+                  referrerPolicy="no-referrer"
+                  srcDoc={attachmentPreviewHtml}
+                  title={t("attachment.previewTitle")}
+                />
+              )
+            ) : (
+              <div className="preview" dangerouslySetInnerHTML={{ __html: sanitizedPreview }} />
+            )}
           </div>
           <div className="editor-publish-row">
             <button type="button" className="primary" onClick={openPublishDialog}>
