@@ -304,7 +304,9 @@ Windows x64 NSIS installer:
 npm run make:win
 ```
 
-Packaging output is generated under `release/`. Before production distribution, configure macOS Developer ID code signing, notarization, a Windows code-signing certificate, app icons, and an update distribution policy separately.
+Packaging output is generated under `release/`. Before production distribution, configure macOS Developer ID code signing, notarization, a Windows code-signing certificate, and an update distribution policy separately.
+
+The app icon is a padlock. Its source is `build/icon.svg`; `build/icon.png` (1024×1024) is rendered from it, and electron-builder converts that PNG into the macOS `.icns` and Windows `.ico` during packaging. After editing the SVG, re-render the PNG at 1024×1024 with a transparent background.
 
 During packaging, Electron locale resources are limited to Korean and the default English locale to reduce macOS DMG and Windows installer generation time.
 

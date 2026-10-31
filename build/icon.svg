@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b6fe0"/>
+      <stop offset="1" stop-color="#1b3a8f"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e3e9f7"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+    <filter id="lockShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#0b1a45" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- macOS icon grid: 824px tile centered on a 1024px canvas -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" filter="url(#shadow)"/>
+
+  <g filter="url(#lockShadow)">
+    <!-- shackle -->
+    <path d="M372 470 V380 a140 140 0 0 1 280 0 V470" fill="none" stroke="#ffffff" stroke-width="64" stroke-linecap="round"/>
+    <!-- body -->
+    <rect x="300" y="452" width="424" height="330" rx="64" fill="url(#body)"/>
+    <!-- keyhole -->
+    <circle cx="512" cy="590" r="44" fill="#1f3f99"/>
+    <path d="M492 612 h40 l14 92 h-68 z" fill="#1f3f99"/>
+  </g>
+</svg>
