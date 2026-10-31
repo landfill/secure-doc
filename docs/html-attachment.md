@@ -30,7 +30,11 @@ The viewer renders attachments only in:
 - The viewer CSP is not relaxed. `frame-src 'none'` stays; `srcdoc` is not a network navigation and is not blocked by it (verified in Chromium).
 - The watermark layer sits above the iframe with `pointer-events: none`.
 
-The admin app preview uses the same `sandbox=""` + `srcdoc` iframe.
+The admin app preview uses the same `sandbox=""` + `srcdoc` iframe. The admin renderer has no page CSP, and `sandbox` alone does not stop image, stylesheet, or font requests, so the preview copy is prefixed with its own CSP (`withAttachmentPreviewCsp`, `default-src 'none'`, inline styles and `data:`/`blob:` media only). Selecting a file therefore never contacts external servers. The meta tag is inserted after a leading doctype so the preview keeps standards mode. The encrypted attachment itself is not modified.
+
+## Character Encoding / 문자 인코딩
+
+`decodeHtmlAttachment()` decodes the selected file using a BOM (UTF-8, UTF-16LE/BE) or a `<meta charset>` / `http-equiv` charset declaration in the first 1024 bytes, defaulting to UTF-8. Decoding is strict: if the bytes do not match the encoding (for example an EUC-KR file without a charset declaration) or the label is unknown, the file is rejected with a "save as UTF-8" message instead of publishing corrupted text. The decoded text is stored in the encrypted package; the original `<meta charset>` tag is left in place and is ignored by `srcdoc`.
 
 ## Issuer Warnings / 발행자 경고
 

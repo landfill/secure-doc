@@ -68,7 +68,13 @@ import {
   type Locale,
   type TranslationKey
 } from "../../shared/i18n";
-import { analyzeHtmlAttachment, MAX_HTML_ATTACHMENT_BYTES, type HtmlAttachmentAnalysis } from "../../shared/htmlAttachment";
+import {
+  analyzeHtmlAttachment,
+  decodeHtmlAttachment,
+  MAX_HTML_ATTACHMENT_BYTES,
+  withAttachmentPreviewCsp,
+  type HtmlAttachmentAnalysis
+} from "../../shared/htmlAttachment";
 import {
   isAllowedLinkHref,
   readHtmlDocumentText,
@@ -881,6 +887,10 @@ export function App(): ReactElement {
     [effectivePublishPolicy.minimumPinLength, locale, pin]
   );
   const sanitizedPreview = useMemo(() => sanitizeHtml(editorHtml), [editorHtml]);
+  const attachmentPreviewHtml = useMemo(
+    () => (attachment ? withAttachmentPreviewCsp(attachment.html) : ""),
+    [attachment]
+  );
   const contentText = useMemo(
     () => (editorMode === "attachment" ? attachment?.text || attachment?.fileName || "" : stripHtml(sanitizedPreview)),
     [attachment, editorMode, sanitizedPreview]
@@ -1290,7 +1300,12 @@ export function App(): ReactElement {
     }
 
     try {
-      const html = await file.text();
+      const html = decodeHtmlAttachment(new Uint8Array(await file.arrayBuffer()));
+      if (html === null) {
+        setError(t("attachment.encodingFailed"));
+        setStatus("");
+        return;
+      }
       setAttachment({
         ...analyzeHtmlAttachment(html),
         fileName: file.name,
@@ -2303,7 +2318,7 @@ export function App(): ReactElement {
                   className="attachment-preview"
                   sandbox=""
                   referrerPolicy="no-referrer"
-                  srcDoc={attachment.html}
+                  srcDoc={attachmentPreviewHtml}
                   title={t("attachment.previewTitle")}
                 />
               )
