@@ -115,7 +115,7 @@ Default templates:
 
 When the `template-pack.business-samples` plugin is enabled, insurance certificate and billing statement templates are added. The insurance certificate template includes basic information, coverage information, and an issuance confirmation table similar to a membership certificate sample. Template packs do not load executable code. They only contribute trusted static template IDs from the bundled app.
 
-To encrypt an existing HTML file instead, switch the editor to the `HTML file` tab and choose a `.html`/`.htm` file (up to 20 MB). The file is encrypted unchanged and the viewer shows it in an iframe with `sandbox=""`, so its CSS and layout are kept while scripts, forms, and network access are blocked. The app warns when the file contains scripts or references external resources, because those parts will not work in the viewer. See [docs/html-attachment.md](docs/html-attachment.md).
+To encrypt an existing HTML file instead, switch the editor to the `Attach HTML file` tab and choose a `.html`/`.htm` file (up to 20 MB). The file is encrypted unchanged and the viewer shows it in an iframe with `sandbox=""`, so its CSS and layout are kept while scripts, forms, and network access are blocked. The app warns when the file contains scripts or references external resources, because those parts will not work in the viewer. See [docs/html-attachment.md](docs/html-attachment.md).
 
 ## Publish and Hand-Off
 
